@@ -4,12 +4,14 @@ const { Configuration, OpenAIApi } = require("openai");
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
+    console.warn('Received non-POST request');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { imageUrl } = req.body;
 
   if (!imageUrl) {
+    console.warn('No imageUrl provided in request body');
     return res.status(400).json({ error: 'Image URL is required' });
   }
 
@@ -19,25 +21,25 @@ module.exports = async (req, res) => {
   const openai = new OpenAIApi(configuration);
 
   try {
+    console.log('Sending request to OpenAI with image URL:', imageUrl);
     const response = await openai.createChatCompletion({
-      model: "gpt-4", // or "gpt-4o-mini" if that's your custom model
+      model: "gpt-4", // Ensure the model supports image inputs
       messages: [
         {
           role: "user",
-          content: [
-            { type: "text", text: "What’s in this image?" },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl,
-              },
-            },
-          ],
+          content: "Analyze the following image and determine if it contains any ingredients.",
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: imageUrl,
+          },
         },
       ],
     });
 
     const assistantMessage = response.data.choices[0].message;
+    console.log('Received response from OpenAI:', assistantMessage.content);
 
     // Simple logic based on the presence of certain keywords
     const ingredientKeywords = ['ingredient', 'ingredients', 'component', 'components', 'substance', 'substances'];
