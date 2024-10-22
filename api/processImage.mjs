@@ -2,6 +2,10 @@
 
 import OpenAI from "openai";
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export default async (req, res) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
@@ -24,13 +28,9 @@ export default async (req, res) => {
     return res.status(400).json({ error: 'Image URL is required' });
   }
 
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
   try {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
-    const response = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini", // Ensure this model supports image inputs as per OpenAI's latest documentation
       messages: [
         {
@@ -47,10 +47,10 @@ export default async (req, res) => {
         },
       ],
     });
-    
-    console.log(response.choices[0]);
 
-    const assistantMessage = response.choices[0].message;
+    console.log(completion.choices[0]);
+
+    const assistantMessage = completion.choices[0].message;
     console.log('Received response from OpenAI:', assistantMessage.content);
 
     // Simple logic based on the presence of certain keywords
