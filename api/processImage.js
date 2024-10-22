@@ -22,21 +22,24 @@ module.exports = async (req, res) => {
 
   try {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
-    const response = await openai.createChatCompletion({
-      model: "gpt-4", // Ensure the model supports image inputs
-      messages: [
-        {
-          role: "user",
-          content: "Analyze the following image and determine if it contains any ingredients.",
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: imageUrl,
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analyze the following image and determine if it contains any ingredients." },
+              {
+                type: "image_url",
+                image_url: {
+                  "url": imageUrl,
+                },
+              },
+            ],
           },
-        },
-      ],
-    });
+        ],
+      });
+      console.log(response.choices[0]);
 
     const assistantMessage = response.data.choices[0].message;
     console.log('Received response from OpenAI:', assistantMessage.content);
