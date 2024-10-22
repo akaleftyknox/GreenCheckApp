@@ -1,8 +1,17 @@
-// api/processImage.js
+// api/processImage.mjs
 
-const { Configuration, OpenAIApi } = require("openai");
+import OpenAI from "openai";
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Replace '*' with your client's domain for better security
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     console.warn('Received non-POST request');
     return res.status(405).json({ error: 'Method not allowed' });
@@ -15,33 +24,33 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Image URL is required' });
   }
 
-  const configuration = new Configuration({
+  const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
-  const openai = new OpenAIApi(configuration);
 
   try {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
     const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Analyze the following image and determine if it contains any ingredients." },
-              {
-                type: "image_url",
-                image_url: {
-                  "url": imageUrl,
-                },
+      model: "gpt-4o-mini", // Ensure this model supports image inputs as per OpenAI's latest documentation
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze the following image and determine if it contains any ingredients." },
+            {
+              type: "image_url",
+              image_url: {
+                "url": imageUrl,
               },
-            ],
-          },
-        ],
-      });
-      console.log(response.choices[0]);
+            },
+          ],
+        },
+      ],
+    });
+    
+    console.log(response.choices[0]);
 
-    const assistantMessage = response.data.choices[0].message;
+    const assistantMessage = response.choices[0].message;
     console.log('Received response from OpenAI:', assistantMessage.content);
 
     // Simple logic based on the presence of certain keywords
