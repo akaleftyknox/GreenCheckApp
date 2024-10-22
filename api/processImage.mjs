@@ -1,10 +1,40 @@
 // api/processImage.mjs
 
 import OpenAI from "openai";
+import Ajv from "ajv";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const ajv = new Ajv();
+
+const ingredientSchema = {
+  type: "object",
+  properties: {
+    ingredients: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          toxicityRating: { 
+            type: "integer", 
+            minimum: 0, 
+            maximum: 10 
+          },
+          description: { type: "string" }
+        },
+        required: ["title", "toxicityRating", "description"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["ingredients"],
+  additionalProperties: false
+};
+
+const validateSchema = ajv.compile(ingredientSchema);
 
 export default async (req, res) => {
   // Handle CORS preflight request
@@ -30,126 +60,152 @@ export default async (req, res) => {
 
   try {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
+    
+    // Step 1: Analyze Image and Extract Ingredients
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Updated model name; ensure it's correct
+      model: "gpt-4o-2024-08-06", // Ensure you're using a model that supports vision and structured outputs
       messages: [
         {
           role: "system",
-          content: `You are an expert in analyzing product packaging images to identify and evaluate ingredients based on health and environmental impact. Your tasks are:
-1. **Identify Ingredients**: Accurately extract a list of all visible ingredients from the product's packaging.
-2. **Analyze Ingredients**: Provide a detailed health analysis for each identified ingredient, referencing credible sources like the Environmental Working Group (EWG). Include both benefits and potential risks.
-3. **Toxicity Scoring**: Assign a toxicity score from 0 to 10 for each ingredient, where 0 indicates non-toxic and 10 indicates highly toxic, based on scientific data.
-4. **Educate Users**: Deliver detailed, user-friendly information about each ingredient, including regulatory status and common uses. Empower consumers with actionable advice to make informed decisions about what they put on or in themselves.
+          content: `You are a Consumer Safety Analyst dedicated to helping consumers make informed choices by analyzing the toxicity of ingredients in food, beverages, and topical products. Your work is crucial in enabling safer consumer decisions in an increasingly complex marketplace.
 
-The response should be in JSON format with the following structure:
+**Expertise and Skills:**
 
-{
-  "ingredients": [
-    {
-      "title": "Ingredient Name",
-      "toxicityRating": 0-10,
-      "description": "Detailed analysis of the ingredient's effects."
-    },
-    ...
-  ]
-}
-`,
+• **Knowledge Base:** You possess extensive knowledge of toxicology, consumer health safety, and environmental standards.
+• **Research Proficiency:** You are adept at interpreting scientific research, studies, and health standards, including those from the Environmental Working Group (EWG).
+• **Communication:** You have the ability to clearly communicate complex information in a simple, accessible manner that is understandable to non-experts, ensuring that consumers receive both accurate and actionable information.
+
+**Responsibilities:**
+
+1. **Ingredient Analysis:** Analyze ingredients listed on product packaging for potential toxicity.
+2. **Toxicity Rating:** Rate each ingredient on a scale from 0 (no known toxicity) to 10 (highly toxic) based on the latest and most reliable scientific data.
+3. **Consumer Education:** Provide detailed, readable descriptions of each ingredient, including its use, benefits, and any potential health risks. Highlight notable findings from scientific studies or research relevant to consumer safety, ensuring that the information supports informed consumer choices.`,
         },
         {
           role: "user",
-          content: "I have no listed or known allergies and I’m not sure if I have any. Please don’t take this into account."
-        }
+          content: [
+            { type: "text", text: "Analyze the following image and extract the list of ingredients." },
+            {
+              type: "image_url",
+              image_url: {
+                "url": imageUrl,
+              },
+            },
+          ],
+        },
       ],
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "ingredients_schema",
-          schema: {
-            type: "object",
-            properties: {
-              ingredients: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: {
-                      type: "string",
-                      description: "The name of the ingredient."
-                    },
-                    toxicityRating: {
-                      type: "number",
-                      minimum: 0,
-                      maximum: 10,
-                      description: "The toxicity rating of the ingredient."
-                    },
-                    description: {
-                      type: "string",
-                      description: "A detailed health analysis of the ingredient."
-                    }
-                  },
-                  required: ["title", "toxicityRating", "description"],
-                  additionalProperties: false
-                }
-              }
-            },
-            required: ["ingredients"],
-            additionalProperties: false
-          }
+          name: "ingredient_analysis_response",
+          schema: ingredientSchema,
+          strict: true
         }
-      }
+      },
+      max_tokens: 500,
     });
 
-    // Log completion result
-    console.log('Received response from OpenAI:', completion);
+    console.log('OpenAI Completion:', completion.choices[0]);
 
-    // Access the 'content' property correctly
-    const assistantMessage = completion.choices[0].message.content;
-    console.log('Received response content from OpenAI:', assistantMessage);
-
-    // Check if the response has content
-    if (!assistantMessage || assistantMessage.trim() === "") {
-      console.error('No ingredients found or no response from OpenAI.');
-      res.status(404).json({ error: 'No ingredients found', ingredients: [] });
-      return;
-    }
+    const assistantMessage = completion.choices[0].message;
+    console.log('Received response from OpenAI:', assistantMessage.content);
 
     // Parse the JSON response
     let parsedResponse;
     try {
-      parsedResponse = JSON.parse(assistantMessage);
-      console.log('Parsed JSON response successfully.');
+      parsedResponse = JSON.parse(assistantMessage.content);
     } catch (parseError) {
-      console.error('Error parsing JSON response:', parseError.message);
+      console.error('Failed to parse JSON response:', parseError);
       return res.status(500).json({ error: 'Failed to parse response from OpenAI' });
     }
 
-    // Validate JSON structure based on schema
-    if (
-      !parsedResponse.ingredients ||
-      !Array.isArray(parsedResponse.ingredients) ||
-      parsedResponse.ingredients.some(
-        ingredient =>
-          typeof ingredient.title !== 'string' ||
-          typeof ingredient.toxicityRating !== 'number' ||
-          typeof ingredient.description !== 'string'
-      )
-    ) {
-      console.error('Invalid JSON structure:', parsedResponse);
+    // Validate the response against the JSON schema
+    const valid = validateSchema(parsedResponse);
+
+    if (!valid) {
+      console.error('Response does not match schema:', validateSchema.errors);
       return res.status(500).json({ error: 'Invalid response format from OpenAI' });
     }
 
-    // Determine if any ingredients were found
-    const ingredientsFound = parsedResponse.ingredients.length > 0;
+    // Step 2: Analyze Each Ingredient for Toxicity
+    const ingredients = parsedResponse.ingredients;
 
-    if (ingredientsFound) {
-      console.log('Ingredients found:', parsedResponse.ingredients);
-      res.status(200).json(parsedResponse);
-    } else {
-      console.log("I didn't find ingredients");
-      res.status(200).json({ message: "I didn't find ingredients" });
+    // Function to analyze toxicity of a single ingredient
+    const analyzeToxicity = async (ingredient) => {
+      const toxicityCompletion = await openai.chat.completions.create({
+        model: "gpt-4o-2024-08-06",
+        messages: [
+          {
+            role: "system",
+            content: `You are a Consumer Safety Analyst specializing in the toxicity of ingredients in consumer products.`,
+          },
+          {
+            role: "user",
+            content: `Provide a toxicity rating and description for the ingredient "${ingredient.title}".`,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "toxicity_analysis",
+            schema: {
+              type: "object",
+              properties: {
+                toxicityRating: { 
+                  type: "integer", 
+                  minimum: 0, 
+                  maximum: 10 
+                },
+                description: { type: "string" }
+              },
+              required: ["toxicityRating", "description"],
+              additionalProperties: false
+            },
+            strict: true
+          }
+        },
+        max_tokens: 300,
+      });
+
+      const toxicityMessage = toxicityCompletion.choices[0].message;
+      let toxicityData;
+      try {
+        toxicityData = JSON.parse(toxicityMessage.content);
+      } catch (error) {
+        console.error(`Failed to parse toxicity data for ${ingredient.title}:`, error);
+        toxicityData = {
+          toxicityRating: null,
+          description: "Toxicity data unavailable."
+        };
+      }
+
+      return {
+        ...ingredient,
+        toxicityRating: toxicityData.toxicityRating || 0,
+        description: toxicityData.description || "No description available."
+      };
+    };
+
+    // Analyze toxicity for all ingredients in parallel
+    const analyzedIngredients = await Promise.all(ingredients.map(analyzeToxicity));
+
+    // Construct the final response
+    const finalResponse = {
+      ingredients: analyzedIngredients
+    };
+
+    // Optionally, validate the final response again
+    const finalValid = validateSchema(finalResponse);
+    if (!finalValid) {
+      console.error('Final response does not match schema:', validateSchema.errors);
+      return res.status(500).json({ error: 'Invalid final response format' });
     }
+
+    // Send the response to the client
+    res.status(200).json(finalResponse);
+
   } catch (error) {
-    console.error('Error during OpenAI API request:', error.response ? error.response.data : error.message);
+    console.error('Error with OpenAI API:', error.response ? error.response.data : error.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
