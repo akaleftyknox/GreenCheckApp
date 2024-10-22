@@ -63,7 +63,7 @@ export default async (req, res) => {
     
     // Step 1: Analyze Image and Extract Ingredients
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-2024-08-06", // Ensure you're using a model that supports vision and structured outputs
+      model: "gpt-4o", // Ensure you're using a model that supports vision and structured outputs
       messages: [
         {
           role: "system",
@@ -133,7 +133,7 @@ export default async (req, res) => {
     // Function to analyze toxicity of a single ingredient
     const analyzeToxicity = async (ingredient) => {
       const toxicityCompletion = await openai.chat.completions.create({
-        model: "gpt-4o-2024-08-06",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
