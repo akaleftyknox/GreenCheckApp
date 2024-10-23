@@ -3,6 +3,8 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import axios from 'axios';
+import Tesseract from 'tesseract.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,9 +14,9 @@ const openai = new OpenAI({
 const IngredientAnalysisSchema = z.object({
   ingredients: z.array(
     z.object({
-      ingredientTitle: z.string().nullable(),
-      ingredientRating: z.number().int().nullable(),
-      ingredientDescription: z.string().nullable(),
+      ingredientTitle: z.string(),
+      ingredientRating: z.number().int(),
+      ingredientDescription: z.string(),
     })
   ),
 });
@@ -23,6 +25,13 @@ const IngredientAnalysisSchema = z.object({
 const requestSchema = z.object({
   imageUrl: z.string().url(),
 });
+
+// Function to parse ingredients from OCR text
+const parseIngredients = (text) => {
+  // Implement parsing logic based on the OCR output format
+  // For example, split by commas or new lines
+  return text.split(/[\n,]+/).map(ingredient => ingredient.trim()).filter(Boolean);
+};
 
 export default async (req, res) => {
   // Handle CORS preflight request
@@ -50,10 +59,28 @@ export default async (req, res) => {
   }
 
   try {
-    console.log('Sending request to OpenAI with image URL:', imageUrl);
+    console.log('Fetching image from URL:', imageUrl);
+    
+    // Step 1: Fetch the image
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(response.data, 'binary');
 
-    const completion = await openai.beta.chat.completions.parse({
-      model: "gpt-4o", // Ensure this is a supported model
+    // Step 2: Perform OCR
+    console.log('Performing OCR on the image');
+    const { data: { text } } = await Tesseract.recognize(imageBuffer, 'eng');
+
+    // Step 3: Extract Ingredients
+    const ingredientsList = parseIngredients(text);
+    console.log('Extracted Ingredients:', ingredientsList);
+
+    if (ingredientsList.length === 0) {
+      return res.status(400).json({ error: 'No ingredients found in the image.' });
+    }
+
+    // Step 4: Send to OpenAI for analysis
+    console.log('Sending ingredients to OpenAI for analysis');
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o", // Corrected model name
       messages: [
         {
           role: "system",
@@ -73,11 +100,11 @@ export default async (req, res) => {
         },
         {
           role: "user",
-          content: `Please analyze the following image for ingredients, their rating, and description: ${imageUrl}`,
+          content: `Please analyze the following list of ingredients for potential toxicity, provide a rating from 0 (no toxicity) to 10 (high toxicity), and offer detailed descriptions: ${ingredientsList.join(', ')}`,
         },
       ],
       response_format: zodResponseFormat(IngredientAnalysisSchema, "ingredient_analysis_response"),
-      max_tokens: 500, // Adjust as needed
+      max_tokens: 1000, // Increased token limit if needed
     });
 
     console.log('OpenAI Completion:', completion.choices[0]);
@@ -107,7 +134,7 @@ export default async (req, res) => {
       res.status(502).json({ error: 'Bad Gateway. No response from OpenAI API.' });
     } else {
       // Other errors
-      console.error('Error setting up OpenAI API request:', error.message);
+      console.error('Error:', error.message);
       res.status(500).json({ error: 'Internal Server Error.' });
     }
   }
