@@ -1,6 +1,8 @@
 // api/processImage.mjs
 
 import OpenAI from "openai";
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -35,9 +37,25 @@ export default async (req, res) => {
       model: "gpt-4o", // Ensure this model supports vision capabilities
       messages: [
         {
+          role: "system",
+          content: `You are a Consumer Safety Analyst dedicated to helping consumers make informed choices by analyzing the toxicity of ingredients in food, beverages, and topical products. Your work is crucial in enabling safer consumer decisions in an increasingly complex marketplace.
+
+            <Expertise and Skills>
+            Knowledge Base: You possess extensive knowledge of toxicology, consumer health safety, and environmental standards.
+            Research Proficiency: You are adept at interpreting scientific research, studies, and health standards, including those from the Environmental Working Group (EWG).
+            Communication: You have the ability to clearly communicate complex information in a simple, accessible manner that is understandable to non-experts, ensuring that consumers receive both accurate and actionable information.
+            </Expertise and Skills>
+
+            <Responsibilities>
+            Ingredient Analysis: Analyze ingredients listed on product packaging for potential toxicity.
+            Toxicity Rating: Rate each ingredient on a scale from 0 (no known toxicity) to 10 (highly toxic) based on the latest and most reliable scientific data.
+            Consumer Education: Provide detailed, readable descriptions of each ingredient, including its use, benefits, and any potential health risks. Highlight notable findings from scientific studies or research relevant to consumer safety, ensuring that the information supports informed consumer choices.
+            </Responsibilities>`,
+        },
+        {
           role: "user",
           content: [
-            { type: "text", text: "Please provide a detailed explanation of the following image." },
+            { type: "text", text: "Please analyze the following image for ingredients, their rating, and description." },
             {
               type: "image_url",
               image_url: {
@@ -47,6 +65,42 @@ export default async (req, res) => {
           ],
         },
       ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "ingredient_analysis_response",
+          schema: {
+            type: "object",
+            properties: {
+              ingredients: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    ingredientTitle: {
+                      type: "string",
+                      description: "The name of the ingredient."
+                    },
+                    ingredientRating: {
+                      type: ["integer", "null"],
+                      description: "The toxicity rating of the ingredient on a scale from 0 to 10."
+                    },
+                    ingredientDescription: {
+                      type: ["string", "null"],
+                      description: "A detailed description of the ingredient, including its use, benefits, and potential health risks."
+                    }
+                  },
+                  required: ["ingredientTitle"],
+                  additionalProperties: false
+                }
+              }
+            },
+            required: ["ingredients"],
+            additionalProperties: false
+          },
+          strict: true
+        },
+      },
       max_tokens: 500, // Adjust as needed
     });
 
@@ -55,8 +109,18 @@ export default async (req, res) => {
     const assistantMessage = completion.choices[0].message;
     console.log('Received response from OpenAI:', assistantMessage.content);
 
-    // Send the OpenAI response directly to the client
-    res.status(200).json({ description: assistantMessage.content });
+    // Attempt to parse the JSON response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(assistantMessage.content);
+      console.log('Parsed JSON response:', parsedResponse);
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', parseError);
+      return res.status(500).json({ error: 'Failed to parse response from OpenAI.' });
+    }
+
+    // Send the structured JSON response back to the client
+    res.status(200).json(parsedResponse);
 
   } catch (error) {
     if (error.response) {
