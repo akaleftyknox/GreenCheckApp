@@ -12,8 +12,8 @@ const openai = new OpenAI({
 const IngredientAnalysisSchema = z.object({
   ingredients: z.array(
     z.object({
-      ingredientTitle: z.string(),
-      ingredientRating: z.number().int().min(0).max(10).nullable(),
+      ingredientTitle: z.string().nullable(),
+      ingredientRating: z.number().int().nullable(),
       ingredientDescription: z.string().nullable(),
     })
   ),
