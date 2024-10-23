@@ -53,7 +53,7 @@ export default async (req, res) => {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
 
     const completion = await openai.beta.chat.completions.parse({
-      model: "gpt-4o-2024-08-06", // Ensure this is a supported model
+      model: "gpt-4o", // Ensure this is a supported model
       messages: [
         {
           role: "system",
