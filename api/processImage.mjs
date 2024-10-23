@@ -19,6 +19,11 @@ const IngredientAnalysisSchema = z.object({
   ),
 });
 
+// Define a Zod schema for request validation
+const requestSchema = z.object({
+  imageUrl: z.string().url(),
+});
+
 export default async (req, res) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
@@ -34,18 +39,21 @@ export default async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed. Please use POST.' });
   }
 
-  const { imageUrl } = req.body;
-
-  if (!imageUrl) {
-    console.warn('No imageUrl provided in request body:', req.body);
-    return res.status(400).json({ error: 'Image URL is required in the request body.' });
+  // Validate request body
+  let imageUrl;
+  try {
+    const parsedBody = requestSchema.parse(req.body);
+    imageUrl = parsedBody.imageUrl;
+  } catch (validationError) {
+    console.warn('Invalid request body:', validationError.errors);
+    return res.status(400).json({ error: 'Invalid request body. Ensure "imageUrl" is a valid URL.' });
   }
 
   try {
     console.log('Sending request to OpenAI with image URL:', imageUrl);
 
     const completion = await openai.beta.chat.completions.parse({
-      model: "gpt-4o", // Ensure this is a supported model
+      model: "gpt-4o-2024-08-06", // Ensure this is a supported model
       messages: [
         {
           role: "system",
@@ -65,13 +73,7 @@ export default async (req, res) => {
         },
         {
           role: "user",
-          content: `Please analyze the following image for ingredients, the rating, and description.`,
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: imageUrl,
-          },
+          content: `Please analyze the following image for ingredients, their rating, and description: ${imageUrl}`,
         },
       ],
       response_format: zodResponseFormat(IngredientAnalysisSchema, "ingredient_analysis_response"),
@@ -88,7 +90,7 @@ export default async (req, res) => {
     console.log('Parsed JSON response:', parsedResponse);
 
     // Send the structured JSON response back to the client
-    res.setHeader('Access-Control-Allow-Origin', '*'); // Ensure CORS headers are set for responses
+    res.setHeader('Access-Control-Allow-Origin', 'https://your-trusted-domain.com'); // Replace with your client's domain
     res.status(200).json(parsedResponse);
 
   } catch (error) {
