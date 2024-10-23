@@ -109,18 +109,8 @@ export default async (req, res) => {
     const assistantMessage = completion.choices[0].message;
     console.log('Received response from OpenAI:', assistantMessage.content);
 
-    // Attempt to parse the JSON response
-    let parsedResponse;
-    try {
-      parsedResponse = JSON.parse(assistantMessage.content);
-      console.log('Parsed JSON response:', parsedResponse);
-    } catch (parseError) {
-      console.error('Failed to parse JSON response:', parseError);
-      return res.status(500).json({ error: 'Failed to parse response from OpenAI.' });
-    }
-
-    // Send the structured JSON response back to the client
-    res.status(200).json(parsedResponse);
+    // Send the OpenAI response directly to the client
+    res.status(200).json({ description: assistantMessage.content });
 
   } catch (error) {
     if (error.response) {
