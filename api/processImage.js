@@ -1,4 +1,4 @@
-import openai from "../utils/openaiClient.mjs";
+const openai = require("../utils/openaiClient.js");
 
 // Function to delay execution
 function delay(ms) {
@@ -11,7 +11,7 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
     try {
       console.log('Sending request to OpenAI with image URL:', imageUrl);
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o", // Ensure this model supports vision capabilities
+        model: "gpt-4-vision-preview", // Updated to correct model name
         messages: [
           {
             role: "system",
@@ -30,22 +30,58 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
             ],
           },
         ],
-        max_tokens: 500, // Adjust as needed
+        max_tokens: 500,
       });
 
       console.log('OpenAI Completion:', completion.choices[0]);
-      return completion;  // Return successfully received response
+      return completion;
     } catch (error) {
       console.log(`Attempt failed - Retrying in ${retryDelay}ms...`);
-      await delay(retryDelay);  // Wait before retrying
-      retries -= 1;  // Decrement the retry count
-      if (retries === 0) throw error;  // If no retries left, throw the last error
+      await delay(retryDelay);
+      retries -= 1;
+      if (retries === 0) throw error;
     }
   }
 }
 
-export default async (req, res) => {
-  // CORS and Method handling remain unchanged...
+// Wrapper function to add additional functionality without modifying the handler
+const withWrapper = (handler) => async (req, res) => {
+  console.log('Wrapper: Incoming request', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body,
+  });
+
+  try {
+    await handler(req, res);
+    console.log('Wrapper: Handler executed successfully.');
+  } catch (error) {
+    console.error('Wrapper: Error during handler execution:', error);
+    // Optionally, send a generic error response if not already handled
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'An unexpected error occurred.' });
+    }
+  } finally {
+    console.log('Wrapper: Request processing completed.');
+  }
+};
+
+const handler = async (req, res) => {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    console.warn('Received non-POST request:', req.method);
+    return res.status(405).json({ error: 'Method not allowed. Please use POST.' });
+  }
 
   const { imageUrl } = req.body;
 
@@ -63,4 +99,9 @@ export default async (req, res) => {
     console.error('Failed after retries:', error);
     res.status(500).json({ error: 'Failed to process image after several attempts.' });
   }
+};
+
+// Export the wrapped handler
+module.exports = {
+  default: withWrapper(handler)
 };

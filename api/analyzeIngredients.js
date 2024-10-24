@@ -1,8 +1,37 @@
-import openai from "../utils/openaiClient.mjs";
-import { ingredientAnalysisFormat } from "../utils/schemas.mjs";
-import { v4 as uuidv4 } from 'uuid';
+const OpenAI = require('openai');
+const { v4: uuidv4 } = require('uuid');
+const { ingredientAnalysisFormat } = require("../utils/schemas.js");
+const openai = require("../utils/openaiClient.js");
 
-export const maxDuration = 60;
+const allowCors = fn => async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // Call the actual handler
+  try {
+    return await fn(req, res);
+  } catch (error) {
+    console.error('API Error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+};
+
+const maxDuration = 60;
 
 function transformIngredients(openAIIngredients) {
   return openAIIngredients
@@ -27,10 +56,9 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
     .map(i => i.trim())
     .filter(i => i.length > 0);
 
-  const BATCH_SIZE = 5; // Process 5 ingredients at a time
+  const BATCH_SIZE = 5;
   let allIngredients = [];
 
-  // Process ingredients in batches
   for (let i = 0; i < ingredientsList.length; i += BATCH_SIZE) {
     const batchIngredients = ingredientsList.slice(i, i + BATCH_SIZE);
     const batchText = batchIngredients.join(', ');
@@ -42,7 +70,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
         const startTime = Date.now();
         
         const completion = await openai.beta.chat.completions.parse({
-          model: "gpt-4o-2024-08-06",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -64,14 +92,13 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
 
         console.log(`Batch completed in ${Date.now() - startTime}ms`);
         
-        // Extract ingredients from this batch and add to overall list
         const response = completion.choices[0].message;
         if (response.refusal) {
           throw new Error(`Analysis refused: ${response.refusal}`);
         }
         
         allIngredients = [...allIngredients, ...response.parsed.ingredients];
-        break; // Success, exit retry loop
+        break;
 
       } catch (error) {
         const errorDetails = {
@@ -96,7 +123,6 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
     }
   }
 
-  // Transform all ingredients to component format
   const transformedIngredients = transformIngredients(allIngredients);
 
   return {
@@ -110,21 +136,12 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
   };
 }
 
-export default async (req, res) => {
+const handler = async (req, res) => {
   console.log('Request received:', {
     method: req.method,
     headers: req.headers,
     bodyLength: req.body ? JSON.stringify(req.body).length : 0
   });
-
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -163,4 +180,10 @@ export default async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+};
+
+// Export the wrapped handler with CORS and maxDuration
+module.exports = {
+  default: allowCors(handler),
+  maxDuration
 };
