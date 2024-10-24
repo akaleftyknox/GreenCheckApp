@@ -13,5 +13,5 @@ const IngredientAnalysis = z.object({
   ingredients: z.array(Ingredient)
 });
 
-// Export the schema and its response format
+// Export the response format
 export const ingredientAnalysisFormat = zodResponseFormat(IngredientAnalysis, "ingredient_analysis");

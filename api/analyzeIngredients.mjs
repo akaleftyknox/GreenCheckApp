@@ -1,7 +1,19 @@
 import openai from "../utils/openaiClient.mjs";
 import { ingredientAnalysisFormat } from "../utils/schemas.mjs";
+import { v4 as uuidv4 } from 'uuid';
 
 export const maxDuration = 60;
+
+function transformIngredients(openAIIngredients) {
+  return openAIIngredients
+    .filter(ing => ing.ingredientTitle && ing.ingredientRating !== null && ing.ingredientDescription)
+    .map(ing => ({
+      id: uuidv4(),
+      title: ing.ingredientTitle,
+      toxicityRating: ing.ingredientRating,
+      description: ing.ingredientDescription
+    }));
+}
 
 async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
   console.log('Starting analysis with OpenAI configuration:', {
@@ -30,7 +42,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
         const startTime = Date.now();
         
         const completion = await openai.beta.chat.completions.parse({
-          model: "gpt-4o",
+          model: "gpt-4o-2024-08-06",
           messages: [
             {
               role: "system",
@@ -46,8 +58,8 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
             }
           ],
           response_format: ingredientAnalysisFormat,
-          temperature: 0.1, // Lower temperature for more consistent, concise responses
-          max_tokens: 2000  // Increased token limit
+          temperature: 0.1,
+          max_tokens: 1000
         });
 
         console.log(`Batch completed in ${Date.now() - startTime}ms`);
@@ -84,12 +96,14 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
     }
   }
 
-  // Return combined results
+  // Transform all ingredients to component format
+  const transformedIngredients = transformIngredients(allIngredients);
+
   return {
     choices: [{
       message: {
         parsed: {
-          ingredients: allIngredients
+          ingredients: transformedIngredients
         }
       }
     }]
@@ -131,7 +145,9 @@ export default async (req, res) => {
     console.log(`Analysis completed in ${Date.now() - startTime}ms`);
     
     res.status(200).json({ 
-      analysis: completion.choices[0].message.parsed,
+      analysis: {
+        ingredients: completion.choices[0].message.parsed.ingredients
+      },
       processingTime: Date.now() - startTime
     });
 

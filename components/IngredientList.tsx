@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, FlatList, Pressable } from 'react-native';
+import { StyleSheet, FlatList, Pressable, ActivityIndicator, View } from 'react-native';
 import IngredientItem from '@/components/IngredientItem';
 import IngredientsNotFound from '@/components/IngredientsNotFound';
 
@@ -13,9 +13,10 @@ type Ingredient = {
 type Props = {
   ingredients: Ingredient[];
   onCloseModal: () => void;
+  isLoading?: boolean;
 };
 
-export default function IngredientList({ ingredients, onCloseModal }: Props) {
+export default function IngredientList({ ingredients, onCloseModal, isLoading = false }: Props) {
   const renderItem = ({ item }: { item: Ingredient }) => (
     <Pressable
       onPress={() => {
@@ -32,14 +33,22 @@ export default function IngredientList({ ingredients, onCloseModal }: Props) {
     </Pressable>
   );
 
-  if (ingredients.length === 0) {
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#ff6a55" />
+      </View>
+    );
+  }
+
+  if (!ingredients || ingredients.length === 0) {
     return <IngredientsNotFound />;
   }
 
   return (
     <FlatList
       data={ingredients}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item: Ingredient) => item.id}
       renderItem={renderItem}
       contentContainerStyle={styles.listContainer}
       showsVerticalScrollIndicator={false}
@@ -54,5 +63,10 @@ const styles = StyleSheet.create({
   },
   pressable: {
     marginBottom: 12,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
