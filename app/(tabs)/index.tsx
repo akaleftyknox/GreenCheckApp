@@ -1,9 +1,8 @@
 // index.tsx
 
-import React from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
 import { supabase } from '@/utils/supabase'; // Import Supabase client
 
 import Button from '@/components/Button';
@@ -25,19 +24,23 @@ type Ingredient = {
 
 export default function Index() {
   const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined); // State for image URL
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]); // State for ingredients
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false); // Added loading state
 
   const pickImageAsync = async () => {
     try {
       console.log('Requesting media library permissions...');
+      setIsLoading(true); // Start loading
+
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (permissionResult.granted === false) {
         Alert.alert("Permission to access camera roll is required!");
         console.log('Permission denied.');
+        setIsLoading(false); // End loading
         return;
       }
 
@@ -64,31 +67,18 @@ export default function Index() {
           console.log('Image uploaded to Supabase. URL:', uploadedUrl);
 
           // Call the serverless function to check for ingredients
-          await checkIngredients(uploadedUrl);
+          const fetchedIngredients = await checkIngredients(uploadedUrl);
+
+          if (fetchedIngredients) {
+            setIngredients(fetchedIngredients);
+            setIsModalVisible(true); // Open modal with real data
+          }
 
         } catch (error: any) {
           console.error('Error uploading image:', error);
           Alert.alert('Error uploading image', error.message || 'Please try again.');
         }
 
-        // Fetch or generate ingredients data. Replace this with actual scan results.
-        const scannedIngredients: Ingredient[] = [
-          {
-            id: '1',
-            title: 'PEG-40 Hydrogenated Castor Oil',
-            toxicityRating: 2,
-            description: 'Safe, though it may cause irritation in sensitive individuals.',
-          },
-          {
-            id: '2',
-            title: 'Parabens',
-            toxicityRating: 4,
-            description: 'Potential endocrine disruptor.',
-          },
-          // Add more ingredients as needed
-        ];
-        setIngredients(scannedIngredients);
-        setIsModalVisible(true); // Open modal automatically
       } else {
         Alert.alert('No Image Selected', 'You did not select any image.');
         console.log('Image selection canceled.');
@@ -96,6 +86,8 @@ export default function Index() {
     } catch (error: any) {
       console.error('Unexpected error in pickImageAsync:', error);
       Alert.alert('Unexpected Error', error.message || 'An unexpected error occurred.');
+    } finally {
+      setIsLoading(false); // End loading
     }
   };
 
@@ -167,60 +159,47 @@ export default function Index() {
     }
   };
 
-  const checkIngredients = async (imageUrl: string) => {
+  const checkIngredients = async (imageUrl: string): Promise<Ingredient[] | null> => {
     try {
       // First API call to process the image
-      const processResponse = await fetch('https://green-check.vercel.app/api/processImage', {
+      const processResponse = await fetch('/api/processImage', { // Use relative path
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ imageUrl }),
       });
-  
+
       const processData = await processResponse.json();
-  
+
       if (!processResponse.ok) {
         throw new Error(processData.error || 'Error processing image');
       }
-  
+
       console.log('Extracted text:', processData.description);
-  
-      // Second API call to analyze ingredients with longer timeout
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
-  
-      try {
-        const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ extractedText: processData.description }),
-          signal: controller.signal
-        });
-  
-        clearTimeout(timeout);
-  
-        const analyzeData = await analyzeResponse.json();
-  
-        if (!analyzeResponse.ok) {
-          throw new Error(analyzeData.error || 'Error analyzing ingredients');
-        }
-  
-        console.log('Analysis result:', analyzeData.analysis);
-        // Handle the analysis result as needed
-  
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          throw new Error('Analysis request timed out. Please try again.');
-        }
-        throw error;
+
+      // Second API call to analyze ingredients
+      const analyzeResponse = await fetch('/api/analyzeIngredients', { // Use relative path
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ extractedText: processData.description }),
+      });
+
+      const analyzeData = await analyzeResponse.json();
+
+      if (!analyzeResponse.ok) {
+        throw new Error(analyzeData.error || 'Error analyzing ingredients');
       }
-  
+
+      console.log('Analysis result:', analyzeData.analysis.ingredients);
+      return analyzeData.analysis.ingredients; // Return the array of ingredients
+
     } catch (error: any) {
       console.error('Error in ingredient analysis chain:', error);
       Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
+      return null;
     }
   };
 
@@ -241,7 +220,7 @@ export default function Index() {
     <View style={styles.container}>
       <View style={styles.imageContainer}>
         <ImageViewer imgSource={PlaceholderImage} selectedImage={selectedImage} />
-        {selectedImage && ingredients.length > 0 && (
+        {selectedImage && (
           <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
         )}
       </View>
@@ -258,7 +237,13 @@ export default function Index() {
         </View>
       )}
       <IngredientResults isVisible={isModalVisible} onClose={onModalClose}>
-        <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+        {isLoading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#ff6a55" />
+          </View>
+        ) : (
+          <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+        )}
       </IngredientResults>
     </View>
   );
@@ -288,5 +273,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 20,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
