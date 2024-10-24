@@ -186,24 +186,37 @@ export default function Index() {
   
       console.log('Extracted text:', processData.description);
   
-      // Second API call to analyze ingredients
-      const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ extractedText: processData.description }),
-      });
+      // Second API call to analyze ingredients with longer timeout
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
   
-      const analyzeData = await analyzeResponse.json();
+      try {
+        const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ extractedText: processData.description }),
+          signal: controller.signal
+        });
   
-      if (!analyzeResponse.ok) {
-        throw new Error(analyzeData.error || 'Error analyzing ingredients');
+        clearTimeout(timeout);
+  
+        const analyzeData = await analyzeResponse.json();
+  
+        if (!analyzeResponse.ok) {
+          throw new Error(analyzeData.error || 'Error analyzing ingredients');
+        }
+  
+        console.log('Analysis result:', analyzeData.analysis);
+        // Handle the analysis result as needed
+  
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          throw new Error('Analysis request timed out. Please try again.');
+        }
+        throw error;
       }
-  
-      console.log('Analysis result:', analyzeData.analysis);
-      // Handle the analysis result as needed
-      // You might want to parse this and update your state accordingly
   
     } catch (error: any) {
       console.error('Error in ingredient analysis chain:', error);
