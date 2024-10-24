@@ -34,10 +34,12 @@ export default async (req, res) => {
     console.log('Received imageUrl:', imageUrl);
 
     // Step 1: Extract text from the image
+    console.log('Calling extractTextFromImage...');
     const extractionResult = await extractTextFromImage(imageUrl);
     console.log('Text Extraction Result:', extractionResult);
 
     // Step 2: Analyze the extracted text for ingredients
+    console.log('Calling analyzeIngredients...');
     const analysisResult = await analyzeIngredients(extractionResult.description);
     console.log('Ingredient Analysis Result:', analysisResult);
 

@@ -5,8 +5,15 @@ import { IngredientAnalysisSchema } from "./schemas.mjs";
 
 export const analyzeIngredients = async (text) => {
   try {
-    // Make the OpenAI API call using the 'create' method
-    const completion = await openai.chat.completions.create({
+    console.log('Starting analyzeIngredients function');
+
+    // Define a timeout promise
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OpenAI API request timed out')), 8000) // 8 seconds
+    );
+
+    // Make the OpenAI API call
+    const completionPromise = openai.chat.completions.create({
       model: "gpt-4", // Correct model name
       messages: [
         {
@@ -28,17 +35,34 @@ export const analyzeIngredients = async (text) => {
           content: `Follow your guidelines, focus on ingredients only and analyze this text to produce your output: ${text}`,
         },
       ],
-      max_tokens: 500, // Adjust as needed
-      temperature: 0.5, // Adjust for response variability
+      max_tokens: 300, // Reduced to speed up response
+      temperature: 0.2, // Adjust for response variability
     });
 
-    console.log('Received response from OpenAI');
+    // Race between the API call and the timeout
+    const completion = await Promise.race([completionPromise, timeout]);
+
+    console.log('Received response from OpenAI for ingredient analysis');
     const assistantMessage = completion.data.choices[0].message.content;
     console.log('Assistant Message:', assistantMessage);
 
-    return assistantMessage;
+    // Parse the assistant's message as JSON
+    let parsedMessage;
+    try {
+      parsedMessage = JSON.parse(assistantMessage);
+      console.log('Parsed Message:', parsedMessage);
+    } catch (parseError) {
+      console.error('Error parsing assistant message as JSON:', parseError);
+      throw new Error('Invalid JSON format in OpenAI response.');
+    }
+
+    // Validate the response using Zod
+    const analysisResult = IngredientAnalysisSchema.parse(parsedMessage);
+    console.log('Validation successful');
+
+    return analysisResult; // This conforms to IngredientAnalysisSchema
   } catch (error) {
     console.error('Error in analyzeIngredients:', error);
-    throw error;
+    throw error; // Let the caller handle the error
   }
 };

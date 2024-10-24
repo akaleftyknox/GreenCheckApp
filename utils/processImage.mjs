@@ -1,9 +1,13 @@
+// /utils/processImage.mjs
+
 import openai from "./openaiClient.mjs";
 
 export const extractTextFromImage = async (imageUrl) => {
   try {
+    console.log('Starting extractTextFromImage function');
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Ensure this model supports vision capabilities
+      model: "gpt-4o", // Corrected model name
       messages: [
         {
           role: "system",
@@ -11,23 +15,20 @@ export const extractTextFromImage = async (imageUrl) => {
         },
         {
           role: "user",
-          content: [
-            { type: "text", text: "Please extract and format all the text you see in this image." },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl,
-              },
-            },
-          ],
+          content: `Please extract and format all the text you see in this image.`,
         },
       ],
       max_tokens: 500, // Adjust as needed
+      temperature: 0.1, // Lower temperature for more deterministic output
     });
 
-    const assistantMessage = completion.choices[0].message.content;
+    console.log('Received response from OpenAI for text extraction');
+    const assistantMessage = completion.data.choices[0].message.content;
+    console.log('Assistant Message:', assistantMessage);
+
     return { description: assistantMessage };
   } catch (error) {
+    console.error('Error in extractTextFromImage:', error);
     throw error; // Handle errors in the calling function
   }
 };
