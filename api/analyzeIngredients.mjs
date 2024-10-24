@@ -9,55 +9,91 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
     maxRetries: openai.maxRetries
   });
 
-  while (retries > 0) {
-    try {
-      console.log(`Attempt ${4 - retries}: Sending request to OpenAI`);
-      const startTime = Date.now();
-      
-      const completion = await openai.beta.chat.completions.parse({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a Consumer Safety Analyst specializing in cosmetic ingredients analysis. 
-            For each ingredient provided:
-            - Extract the ingredient name as ingredientTitle
-            - Rate its safety from 0-10 (0 safest, 10 most toxic) as ingredientRating
-            - Provide a brief description of its purpose and any safety concerns as ingredientDescription`
-          },
-          {
-            role: "user",
-            content: `Analyze these ingredients: ${extractedText}`
-          }
-        ],
-        response_format: ingredientAnalysisFormat,
-        temperature: 0.3,
-        max_tokens: 500
-      });
+  // Split ingredients into a list
+  const ingredientsList = extractedText
+    .split(',')
+    .map(i => i.trim())
+    .filter(i => i.length > 0);
 
-      console.log(`OpenAI request completed in ${Date.now() - startTime}ms`);
-      return completion;
+  const BATCH_SIZE = 5; // Process 5 ingredients at a time
+  let allIngredients = [];
 
-    } catch (error) {
-      const errorDetails = {
-        name: error.name,
-        message: error.message,
-        status: error?.status,
-        type: error?.type,
-        code: error?.code,
-        attempt: 4 - retries
-      };
-      
-      console.error('OpenAI request failed:', errorDetails);
-      
-      if (retries === 1) {
-        throw new Error(`Final attempt failed: ${error.message}`);
+  // Process ingredients in batches
+  for (let i = 0; i < ingredientsList.length; i += BATCH_SIZE) {
+    const batchIngredients = ingredientsList.slice(i, i + BATCH_SIZE);
+    const batchText = batchIngredients.join(', ');
+
+    let retryCount = retries;
+    while (retryCount > 0) {
+      try {
+        console.log(`Analyzing batch ${i/BATCH_SIZE + 1}, attempt ${4 - retryCount}`);
+        const startTime = Date.now();
+        
+        const completion = await openai.beta.chat.completions.parse({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are a Consumer Safety Analyst. For each ingredient, provide:
+              - The exact ingredient name as ingredientTitle
+              - A safety rating (0-10, 0 safest) as ingredientRating
+              - A brief, concise description as ingredientDescription
+              Be concise but accurate.`
+            },
+            {
+              role: "user",
+              content: `Analyze these ingredients: ${batchText}`
+            }
+          ],
+          response_format: ingredientAnalysisFormat,
+          temperature: 0.1, // Lower temperature for more consistent, concise responses
+          max_tokens: 2000  // Increased token limit
+        });
+
+        console.log(`Batch completed in ${Date.now() - startTime}ms`);
+        
+        // Extract ingredients from this batch and add to overall list
+        const response = completion.choices[0].message;
+        if (response.refusal) {
+          throw new Error(`Analysis refused: ${response.refusal}`);
+        }
+        
+        allIngredients = [...allIngredients, ...response.parsed.ingredients];
+        break; // Success, exit retry loop
+
+      } catch (error) {
+        const errorDetails = {
+          name: error.name,
+          message: error.message,
+          status: error?.status,
+          type: error?.type,
+          code: error?.code,
+          attempt: 4 - retryCount,
+          batch: i/BATCH_SIZE + 1
+        };
+        
+        console.error('Batch analysis failed:', errorDetails);
+        
+        if (retryCount === 1) {
+          throw new Error(`Final attempt failed for batch ${i/BATCH_SIZE + 1}: ${error.message}`);
+        }
+        
+        retryCount--;
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      
-      retries--;
-      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
+
+  // Return combined results
+  return {
+    choices: [{
+      message: {
+        parsed: {
+          ingredients: allIngredients
+        }
+      }
+    }]
+  };
 }
 
 export default async (req, res) => {
@@ -94,19 +130,8 @@ export default async (req, res) => {
     
     console.log(`Analysis completed in ${Date.now() - startTime}ms`);
     
-    // Check for refusal
-    const response = completion.choices[0].message;
-    if (response.refusal) {
-      return res.status(400).json({
-        error: 'Analysis refused',
-        details: response.refusal,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Return parsed structured data
     res.status(200).json({ 
-      analysis: response.parsed,
+      analysis: completion.choices[0].message.parsed,
       processingTime: Date.now() - startTime
     });
 
