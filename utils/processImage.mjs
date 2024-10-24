@@ -1,4 +1,4 @@
-import openai from "../utils/openaiClient.mjs";
+import openai from "./openaiClient.mjs";
 
 export const extractTextFromImage = async (imageUrl) => {
   try {

@@ -1,10 +1,10 @@
-import openai from "../utils/openaiClient.mjs";
+import openai from "./openaiClient.mjs";
 import { zodResponseFormat } from "openai/helpers/zod";
-import { IngredientAnalysisSchema } from "../utils/schemas.mjs";
+import { IngredientAnalysisSchema } from "./schemas.mjs";
 
 export const analyzeIngredients = async (text) => {
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await openai.beta.chat.completions.parse({
       model: "gpt-4o", // Ensure this model supports necessary capabilities
       messages: [
         {

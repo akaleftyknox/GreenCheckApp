@@ -1,5 +1,10 @@
-import { extractTextFromImage } from "./processImage.mjs";
-import { analyzeIngredients } from "./analyzeIngredients.mjs";
+// /api/index.mjs
+
+import { extractTextFromImage } from "../utils/processImage.mjs";
+import { analyzeIngredients } from "../utils/analyzeIngredients.mjs";
+
+// Import necessary modules for handling HTTP requests
+// Assuming you're using a server framework like Express or similar
 
 export default async (req, res) => {
   // Handle CORS preflight request

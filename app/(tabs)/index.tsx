@@ -169,7 +169,7 @@ export default function Index() {
 
   const checkIngredients = async (imageUrl: string) => {
     try {
-      const response = await fetch('https://green-check-l98rj3kyk-akaleftyknoxs-projects.vercel.app/api/processImage', {
+      const response = await fetch('https://green-check.vercel.app/api/processImage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
