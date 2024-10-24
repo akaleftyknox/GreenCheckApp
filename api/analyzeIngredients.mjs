@@ -29,8 +29,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
             content: `Please analyze these ingredients for safety and toxicity: ${extractedText}`
           }
         ],
-        max_tokens: 1000,
-        timeout: 60000 // 60 second timeout
+        max_tokens: 1000
       });
 
       console.log('Analysis completed successfully');
@@ -46,9 +45,6 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
 }
 
 export default async (req, res) => {
-  // Set a longer timeout for the response
-  res.setTimeout(120000); // 2 minutes
-
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -75,6 +71,7 @@ export default async (req, res) => {
     const completion = await analyzeIngredientsWithRetry(extractedText);
     console.log('OpenAI Completion:', completion.choices[0]);
     const analysisResult = completion.choices[0].message.content;
+    
     res.status(200).json({ analysis: analysisResult });
 
   } catch (error) {
