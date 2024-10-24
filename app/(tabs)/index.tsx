@@ -169,54 +169,47 @@ export default function Index() {
 
   const checkIngredients = async (imageUrl: string) => {
     try {
-      const response = await fetch('https://green-check.vercel.app/api/processImage', {
+      // First API call to process the image
+      const processResponse = await fetch('https://green-check.vercel.app/api/processImage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ imageUrl }),
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        console.log(data.message); // Logs "I found ingredients" or "I didn't find ingredients"
-      } else {
-        console.error('Error from server:', data.error);
-        Alert.alert('Error', data.error || 'An error occurred while processing the image.');
+  
+      const processData = await processResponse.json();
+  
+      if (!processResponse.ok) {
+        throw new Error(processData.error || 'Error processing image');
       }
-    } catch (error: any) {
-      console.error('Error communicating with server:', error);
-      Alert.alert('Error', error.message || 'An error occurred while communicating with the server.');
-    }
-  };
-
-  // Commented out since API endpoint isn't set yet
-  /*
-  const sendImageUrlToAPI = async (url: string) => {
-    try {
-      const response = await fetch('https://your-api-endpoint.com/upload', {
+  
+      console.log('Extracted text:', processData.description);
+  
+      // Second API call to analyze ingredients
+      const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ imageUrl: url }),
+        body: JSON.stringify({ extractedText: processData.description }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API responded with status ${response.status}: ${errorText}`);
+  
+      const analyzeData = await analyzeResponse.json();
+  
+      if (!analyzeResponse.ok) {
+        throw new Error(analyzeData.error || 'Error analyzing ingredients');
       }
-
-      const data = await response.json();
-      console.log('API Response:', data);
-      // Handle the API response as needed
+  
+      console.log('Analysis result:', analyzeData.analysis);
+      // Handle the analysis result as needed
+      // You might want to parse this and update your state accordingly
+  
     } catch (error: any) {
-      console.error('Error sending image URL to API:', error);
-      Alert.alert('API Communication Error', error.message || 'Please try again.');
+      console.error('Error in ingredient analysis chain:', error);
+      Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
     }
   };
-  */
 
   const onReset = () => {
     setSelectedImage(undefined);
