@@ -11,7 +11,7 @@
     }
   ],
   "functions": {
-    "api/*.mjs": {
+    "api/*.js": {
       "maxDuration": 50
     }
   }
