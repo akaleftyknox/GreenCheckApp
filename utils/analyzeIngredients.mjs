@@ -32,16 +32,13 @@ export const analyzeIngredients = async (text) => {
       temperature: 0.5, // Adjust for response variability
     });
 
-    // Extract the assistant's message
-    const assistantMessage = completion.choices[0].message.content;
+    console.log('Received response from OpenAI');
+    const assistantMessage = completion.data.choices[0].message.content;
+    console.log('Assistant Message:', assistantMessage);
 
-    // Validate the response using Zod
-    const analysisResult = IngredientAnalysisSchema.parse(JSON.parse(assistantMessage));
-
-    return analysisResult; // This conforms to IngredientAnalysisSchema
+    return assistantMessage;
   } catch (error) {
-    // Enhanced error logging
     console.error('Error in analyzeIngredients:', error);
-    throw error; // Propagate the error to be handled by the caller
+    throw error;
   }
 };
