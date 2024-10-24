@@ -11,7 +11,7 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
     try {
       console.log('Sending request to OpenAI with image URL:', imageUrl);
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-vision-preview", // Updated to correct model name
+        model: "gpt-4o", // Updated to correct model name
         messages: [
           {
             role: "system",
