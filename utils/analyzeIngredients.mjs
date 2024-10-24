@@ -1,11 +1,13 @@
+// /utils/analyzeIngredients.mjs
+
 import openai from "./openaiClient.mjs";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { IngredientAnalysisSchema } from "./schemas.mjs";
 
 export const analyzeIngredients = async (text) => {
   try {
-    const completion = await openai.beta.chat.completions.parse({
-      model: "gpt-4o", // Ensure this model supports necessary capabilities
+    // Make the OpenAI API call using the 'create' method
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4", // Correct model name
       messages: [
         {
           role: "system",
@@ -26,14 +28,20 @@ export const analyzeIngredients = async (text) => {
           content: `Follow your guidelines, focus on ingredients only and analyze this text to produce your output: ${text}`,
         },
       ],
-      response_format: zodResponseFormat(IngredientAnalysisSchema, "ingredient_analysis"),
       max_tokens: 500, // Adjust as needed
+      temperature: 0.5, // Adjust for response variability
     });
 
+    // Extract the assistant's message
     const assistantMessage = completion.choices[0].message.content;
-    return assistantMessage; // This should conform to IngredientAnalysisSchema
+
+    // Validate the response using Zod
+    const analysisResult = IngredientAnalysisSchema.parse(JSON.parse(assistantMessage));
+
+    return analysisResult; // This conforms to IngredientAnalysisSchema
   } catch (error) {
+    // Enhanced error logging
     console.error('Error in analyzeIngredients:', error);
-    throw error;
+    throw error; // Propagate the error to be handled by the caller
   }
 };
