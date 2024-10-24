@@ -1,6 +1,6 @@
 // /api/processImage.mjs
 
-import openai from "./openaiClient.mjs";
+import openai from "./utils/openaiClient.mjs";
 
 export default async (req, res) => {
   // Handle CORS preflight request
