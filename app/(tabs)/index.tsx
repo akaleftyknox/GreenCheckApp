@@ -1,9 +1,8 @@
 // index.tsx
 
-import React from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
 import { supabase } from '@/utils/supabase'; // Import Supabase client
 
 import Button from '@/components/Button';
@@ -25,19 +24,24 @@ type Ingredient = {
 
 export default function Index() {
   const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined); // State for image URL
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]); // State for ingredients
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false); // Added loading state
 
+  // Function to pick an image
   const pickImageAsync = async () => {
     try {
       console.log('Requesting media library permissions...');
+      setIsLoading(true); // Start loading
+
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (permissionResult.granted === false) {
         Alert.alert("Permission to access camera roll is required!");
         console.log('Permission denied.');
+        setIsLoading(false); // End loading
         return;
       }
 
@@ -49,56 +53,38 @@ export default function Index() {
       });
 
       if (!result.canceled) {
-        const image = result.assets[0];
-        const localUri = image.uri;
-        console.log('Selected Image URI:', localUri);
-        setSelectedImage(localUri);
+        const uri = result.assets[0].uri;
+        console.log('Image selected:', uri);
+        setSelectedImage(uri);
 
-        try {
-          // Upload image to Supabase Storage
-          const fileName = image.fileName || `uploaded_image_${Date.now()}.jpg`;
-          console.log('Preparing to upload:', fileName);
-          const uploadedUrl = await uploadImageToSupabase(localUri, fileName, image);
+        // Upload image to Supabase
+        const fileName = uri.split('/').pop() || 'image.jpg';
+        const uploadedUrl = await uploadImageToSupabase(uri, fileName, result.assets[0]);
+
+        if (uploadedUrl) {
           setImageUrl(uploadedUrl);
+          console.log('Image uploaded to Supabase:', uploadedUrl);
 
-          console.log('Image uploaded to Supabase. URL:', uploadedUrl);
-
-          // Call the serverless function to check for ingredients
+          // Send URL to API to process image and analyze ingredients
           await checkIngredients(uploadedUrl);
-
-        } catch (error: any) {
-          console.error('Error uploading image:', error);
-          Alert.alert('Error uploading image', error.message || 'Please try again.');
+        } else {
+          console.log('Failed to upload image.');
+          Alert.alert('Upload Failed', 'Failed to upload image to storage.');
+          setIsLoading(false); // End loading
         }
-
-        // Fetch or generate ingredients data. Replace this with actual scan results.
-        const scannedIngredients: Ingredient[] = [
-          {
-            id: '1',
-            title: 'PEG-40 Hydrogenated Castor Oil',
-            toxicityRating: 2,
-            description: 'Safe, though it may cause irritation in sensitive individuals.',
-          },
-          {
-            id: '2',
-            title: 'Parabens',
-            toxicityRating: 4,
-            description: 'Potential endocrine disruptor.',
-          },
-          // Add more ingredients as needed
-        ];
-        setIngredients(scannedIngredients);
-        setIsModalVisible(true); // Open modal automatically
       } else {
         Alert.alert('No Image Selected', 'You did not select any image.');
         console.log('Image selection canceled.');
+        setIsLoading(false); // End loading
       }
     } catch (error: any) {
       console.error('Unexpected error in pickImageAsync:', error);
       Alert.alert('Unexpected Error', error.message || 'An unexpected error occurred.');
+      setIsLoading(false); // End loading
     }
   };
 
+  // Function to upload image to Supabase
   const uploadImageToSupabase = async (uri: string, fileName: string, image: any): Promise<string> => {
     try {
       console.log('Fetching image from URI...');
@@ -118,7 +104,6 @@ export default function Index() {
       }
 
       // Define the path in Supabase Storage
-      // Remove 'images/' prefix to avoid nested paths
       const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpeg';
       const path = `${Date.now()}.${fileExt}`;
       console.log('Upload Path:', path);
@@ -167,8 +152,10 @@ export default function Index() {
     }
   };
 
+  // Function to check ingredients using API endpoints
   const checkIngredients = async (imageUrl: string) => {
     try {
+      setIsLoading(true); // Start loading
       // First API call to process the image
       const processResponse = await fetch('https://green-check.vercel.app/api/processImage', {
         method: 'POST',
@@ -177,19 +164,19 @@ export default function Index() {
         },
         body: JSON.stringify({ imageUrl }),
       });
-  
+    
       const processData = await processResponse.json();
-  
+    
       if (!processResponse.ok) {
         throw new Error(processData.error || 'Error processing image');
       }
-  
+    
       console.log('Extracted text:', processData.description);
-  
+    
       // Second API call to analyze ingredients with longer timeout
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
-  
+    
       try {
         const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
           method: 'POST',
@@ -199,31 +186,35 @@ export default function Index() {
           body: JSON.stringify({ extractedText: processData.description }),
           signal: controller.signal
         });
-  
+    
         clearTimeout(timeout);
-  
-        const analyzeData = await analyzeResponse.json();
-  
+    
         if (!analyzeResponse.ok) {
+          const analyzeData = await analyzeResponse.json();
           throw new Error(analyzeData.error || 'Error analyzing ingredients');
         }
-  
+    
+        const analyzeData = await analyzeResponse.json();
         console.log('Analysis result:', analyzeData.analysis);
-        // Handle the analysis result as needed
-  
+        setIngredients(analyzeData.analysis.ingredients); // Set the fetched ingredients
+        setIsModalVisible(true); // Open the modal
+        setIsLoading(false); // End loading
+    
       } catch (error: any) {
         if (error.name === 'AbortError') {
           throw new Error('Analysis request timed out. Please try again.');
         }
         throw error;
       }
-  
+    
     } catch (error: any) {
       console.error('Error in ingredient analysis chain:', error);
       Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
+      setIsLoading(false); // End loading
     }
   };
 
+  // Function to reset the state
   const onReset = () => {
     setSelectedImage(undefined);
     setImageUrl(undefined);
@@ -232,6 +223,7 @@ export default function Index() {
     console.log('App state has been reset.');
   };
 
+  // Function to handle modal close
   const onModalClose = () => {
     onReset(); // Reset state when modal is closed
     console.log('Modal has been closed and app state reset.');
@@ -241,24 +233,20 @@ export default function Index() {
     <View style={styles.container}>
       <View style={styles.imageContainer}>
         <ImageViewer imgSource={PlaceholderImage} selectedImage={selectedImage} />
-        {selectedImage && ingredients.length > 0 && (
-          <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
-        )}
       </View>
-      {selectedImage && ingredients.length > 0 && (
-        <View style={styles.optionsContainer}>
-          <View style={styles.optionsRow}>
-            <IconButton icon="refresh" label="Reset" onPress={onReset} />
-          </View>
-        </View>
-      )}
       {!selectedImage && (
         <View style={styles.footerContainer}>
           <Button theme="primary" label="Choose a photo" onPress={pickImageAsync} />
         </View>
       )}
       <IngredientResults isVisible={isModalVisible} onClose={onModalClose}>
-        <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+        {isLoading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#ff6a55" />
+          </View>
+        ) : (
+          <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+        )}
       </IngredientResults>
     </View>
   );
@@ -288,5 +276,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 20,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

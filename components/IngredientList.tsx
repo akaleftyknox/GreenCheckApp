@@ -1,3 +1,5 @@
+// IngredientList.tsx
+
 import React from 'react';
 import { StyleSheet, FlatList, Pressable, ActivityIndicator, View } from 'react-native';
 import IngredientItem from '@/components/IngredientItem';
@@ -17,6 +19,7 @@ type Props = {
 };
 
 export default function IngredientList({ ingredients, onCloseModal, isLoading = false }: Props) {
+  // Render each ingredient item
   const renderItem = ({ item }: { item: Ingredient }) => (
     <Pressable
       onPress={() => {
@@ -34,6 +37,7 @@ export default function IngredientList({ ingredients, onCloseModal, isLoading = 
   );
 
   if (isLoading) {
+    // Display loading indicator when data is being fetched
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#ff6a55" />
@@ -42,6 +46,7 @@ export default function IngredientList({ ingredients, onCloseModal, isLoading = 
   }
 
   if (!ingredients || ingredients.length === 0) {
+    // Display message if no ingredients are found
     return <IngredientsNotFound />;
   }
 
