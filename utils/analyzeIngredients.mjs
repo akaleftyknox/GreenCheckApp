@@ -14,7 +14,7 @@ export const analyzeIngredients = async (text) => {
 
     // Make the OpenAI API call
     const completionPromise = openai.chat.completions.create({
-      model: "gpt-4", // Correct model name
+      model: "gpt-4o", // Correct model name
       messages: [
         {
           role: "system",
