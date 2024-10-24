@@ -1,84 +1,108 @@
 import openai from "../utils/openaiClient.mjs";
 
-// Function to delay execution
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+export const maxDuration = 60;
 
-// Function to handle the OpenAI call with retries
-async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDelay = 2000) {
+async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
+  console.log('Starting analysis with OpenAI configuration:', {
+    timeout: openai.timeout,
+    maxRetries: openai.maxRetries
+  });
+
   while (retries > 0) {
     try {
-      console.log('Attempt to analyze ingredients...');
+      console.log(`Attempt ${4 - retries}: Sending request to OpenAI`);
+      const startTime = Date.now();
+      
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4",
         messages: [
           {
             role: "system",
-            content: `You are a Consumer Safety Analyst specialized in analyzing cosmetic and personal care product ingredients. 
-            Your task is to:
-            1. Identify individual ingredients from the provided list
-            2. Rate each ingredient's toxicity on a scale of 0-10 (0 being completely safe, 10 being highly toxic)
-            3. Provide a brief description of each ingredient's purpose and any potential health concerns
-            
-            Be thorough but concise. If you're uncertain about an ingredient, state that explicitly.
-            Focus on scientific evidence and reliable sources like EWG's Skin Deep database.`
+            content: "You are a Consumer Safety Analyst. Analyze cosmetic ingredients for safety and toxicity. Rate 0-10 and explain key concerns."
           },
           {
             role: "user",
-            content: `Please analyze these ingredients for safety and toxicity: ${extractedText}`
+            content: `Analyze these ingredients: ${extractedText}`
           }
         ],
-        max_tokens: 1000
+        max_tokens: 500,
+        temperature: 0.7
       });
 
-      console.log('Analysis completed successfully');
+      console.log(`OpenAI request completed in ${Date.now() - startTime}ms`);
       return completion;
+
     } catch (error) {
-      console.error(`Analysis attempt failed:`, error);
-      if (retries === 1) throw error; // Last attempt failed
-      console.log(`Retrying in ${retryDelay}ms... (${retries - 1} attempts remaining)`);
-      await delay(retryDelay);
+      const errorDetails = {
+        name: error.name,
+        message: error.message,
+        status: error?.status,
+        type: error?.type,
+        code: error?.code,
+        attempt: 4 - retries
+      };
+      
+      console.error('OpenAI request failed:', errorDetails);
+      
+      if (retries === 1) {
+        throw new Error(`Final attempt failed: ${error.message}`);
+      }
+      
       retries--;
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 }
 
 export default async (req, res) => {
+  console.log('Request received:', {
+    method: req.method,
+    headers: req.headers,
+    bodyLength: req.body ? JSON.stringify(req.body).length : 0
+  });
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.status(200).end();
     return;
   }
 
   if (req.method !== 'POST') {
-    console.warn('Received non-POST request:', req.method);
-    return res.status(405).json({ error: 'Method not allowed. Please use POST.' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { extractedText } = req.body;
 
   if (!extractedText) {
-    console.warn('No extracted text provided in request body:', req.body);
-    return res.status(400).json({ error: 'Extracted text is required in the request body.' });
+    return res.status(400).json({ error: 'No text provided' });
   }
 
   try {
-    console.log('Sending request to OpenAI for ingredient analysis with extracted text:', extractedText);
+    const startTime = Date.now();
+    console.log('Starting ingredient analysis...');
     
     const completion = await analyzeIngredientsWithRetry(extractedText);
-    console.log('OpenAI Completion:', completion.choices[0]);
-    const analysisResult = completion.choices[0].message.content;
     
-    res.status(200).json({ analysis: analysisResult });
+    console.log(`Analysis completed in ${Date.now() - startTime}ms`);
+    
+    res.status(200).json({ 
+      analysis: completion.choices[0].message.content,
+      processingTime: Date.now() - startTime
+    });
 
   } catch (error) {
-    console.error('Error while interacting with OpenAI:', error);
+    console.error('Fatal error in ingredient analysis:', {
+      error: error.message,
+      stack: error.stack
+    });
+    
     res.status(500).json({ 
-      error: 'Failed to analyze ingredients after multiple attempts',
-      details: error.message
+      error: 'Analysis failed',
+      details: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 };
