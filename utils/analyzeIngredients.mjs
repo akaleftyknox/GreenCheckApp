@@ -26,13 +26,14 @@ export const analyzeIngredients = async (text) => {
           content: `Follow your guidelines, focus on ingredients only and analyze this text to produce your output: ${text}`,
         },
       ],
-      response_format: zodResponseFormat(IngredientAnalysisSchema),
+      response_format: zodResponseFormat(IngredientAnalysisSchema, "ingredient_analysis"),
       max_tokens: 500, // Adjust as needed
     });
 
     const assistantMessage = completion.choices[0].message.content;
     return assistantMessage; // This should conform to IngredientAnalysisSchema
   } catch (error) {
-    throw error; // Handle errors in the calling function
+    console.error('Error in analyzeIngredients:', error);
+    throw error;
   }
 };
