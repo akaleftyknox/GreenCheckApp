@@ -9,9 +9,9 @@ const { zodResponseFormat } = require('openai/helpers/zod');
 const IngredientAnalysisSchema = z.object({
   ingredients: z.array(
     z.object({
-      ingredientTitle: z.string(),
-      ingredientRating: z.number().min(0).max(10),
-      ingredientDescription: z.string(),
+      ingredientTitle: z.string().nullable(),
+      ingredientRating: z.number().nullable(),
+      ingredientDescription: z.string().nullable(),
     })
   ),
 });
