@@ -67,12 +67,9 @@ const withWrapper = (handler) => async (req, res) => {
   }
 };
 
+// Handler Function with Correct CORS Headers
 const handler = async (req, res) => {
-  // Add CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  // CORS Middleware handled by withWrapper
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;

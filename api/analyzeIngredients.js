@@ -1,12 +1,18 @@
-const OpenAI = require('openai');
+const { Configuration, OpenAIApi } = require('openai');
 const { v4: uuidv4 } = require('uuid');
 const { ingredientAnalysisFormat } = require("../utils/schemas.js");
-const openai = require("../utils/openaiClient.js");
 
+// Initialize OpenAI API client
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY, // Ensure this is set
+});
+const openai = new OpenAIApi(configuration);
+
+// CORS Middleware
 const allowCors = fn => async (req, res) => {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Adjust as needed
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
@@ -64,13 +70,14 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
     const batchText = batchIngredients.join(', ');
 
     let retryCount = retries;
+
     while (retryCount > 0) {
       try {
-        console.log(`Analyzing batch ${i/BATCH_SIZE + 1}, attempt ${4 - retryCount}`);
+        console.log(`Analyzing batch ${i / BATCH_SIZE + 1}, attempt ${4 - retryCount}`);
         const startTime = Date.now();
-        
-        const completion = await openai.beta.chat.completions.parse({
-          model: "gpt-4o",
+
+        const completion = await openai.createChatCompletion({
+          model: "gpt-4", // Corrected model name
           messages: [
             {
               role: "system",
@@ -91,12 +98,12 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
         });
 
         console.log(`Batch completed in ${Date.now() - startTime}ms`);
-        
-        const response = completion.choices[0].message;
+
+        const response = completion.data.choices[0].message;
         if (response.refusal) {
           throw new Error(`Analysis refused: ${response.refusal}`);
         }
-        
+
         allIngredients = [...allIngredients, ...response.parsed.ingredients];
         break;
 
@@ -108,15 +115,15 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3) {
           type: error?.type,
           code: error?.code,
           attempt: 4 - retryCount,
-          batch: i/BATCH_SIZE + 1
+          batch: i / BATCH_SIZE + 1
         };
-        
+
         console.error('Batch analysis failed:', errorDetails);
-        
+
         if (retryCount === 1) {
-          throw new Error(`Final attempt failed for batch ${i/BATCH_SIZE + 1}: ${error.message}`);
+          throw new Error(`Final attempt failed for batch ${i / BATCH_SIZE + 1}: ${error.message}`);
         }
-        
+
         retryCount--;
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
