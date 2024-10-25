@@ -1,14 +1,12 @@
 import { View, Text, StyleSheet } from 'react-native';
 
-// Match the transformed API data structure
 type Props = {
-  title: string;        // from ingredientTitle
-  toxicityRating: number; // from ingredientRating
-  description: string;  // from ingredientDescription
+  title: string;
+  toxicityRating: number;
+  description: string;
 };
 
 export default function IngredientItem({ title, toxicityRating, description }: Props) {
-  // Component implementation stays the same
   return (
     <View style={styles.ingredient}>
       <Text style={styles.ingredientTitle}>{title}</Text>

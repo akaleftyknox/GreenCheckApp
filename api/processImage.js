@@ -1,4 +1,5 @@
 const openai = require("../utils/openaiClient.js");
+const corsMiddleware = require("../utils/corsMiddleware.js");
 
 // Function to delay execution
 function delay(ms) {
@@ -11,7 +12,7 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
     try {
       console.log('Sending request to OpenAI with image URL:', imageUrl);
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o", // Updated to correct model name
+        model: "gpt-4o", // Correct model name
         messages: [
           {
             role: "system",
@@ -67,14 +68,7 @@ const withWrapper = (handler) => async (req, res) => {
   }
 };
 
-// Handler Function with Correct CORS Headers
 const handler = async (req, res) => {
-  // CORS Middleware handled by withWrapper
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
   if (req.method !== 'POST') {
     console.warn('Received non-POST request:', req.method);
     return res.status(405).json({ error: 'Method not allowed. Please use POST.' });
@@ -98,7 +92,7 @@ const handler = async (req, res) => {
   }
 };
 
-// Export the wrapped handler
+// Export the wrapped handler with CORS middleware
 module.exports = {
-  default: withWrapper(handler)
+  default: corsMiddleware(withWrapper(handler))
 };
