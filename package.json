@@ -18,7 +18,9 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@dotlottie/react-player": "^1.6.19",
     "@expo/vector-icons": "^14.0.2",
+    "@lottiefiles/react-lottie-player": "^3.5.4",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-navigation/native": "^6.0.2",
     "@supabase/supabase-js": "^2.45.6",
@@ -39,6 +41,7 @@
     "expo-status-bar": "~1.12.1",
     "expo-system-ui": "~3.0.7",
     "expo-web-browser": "~13.0.3",
+    "lottie-react-native": "^7.0.0",
     "openai": "^4.68.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
@@ -52,8 +55,7 @@
     "react-native-web": "~0.19.10",
     "tesseract.js": "^5.1.1",
     "uuid": "^10.0.0",
-    "zod": "^3.23.8",
-    "lottie-react-native": "6.7.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

@@ -46,17 +46,22 @@ export default function IngredientList({ ingredients, onCloseModal, isLoading = 
   }
 
   return (
-    <FlatList
-      data={ingredients}
-      keyExtractor={(item: Ingredient) => item.id}
-      renderItem={renderItem}
-      contentContainerStyle={styles.listContainer}
-      showsVerticalScrollIndicator={false}
-    />
+    <View style={styles.container}>
+      <FlatList
+        data={ingredients}
+        keyExtractor={(item: Ingredient) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   listContainer: {
     paddingHorizontal: 24,
     paddingVertical: 16,
