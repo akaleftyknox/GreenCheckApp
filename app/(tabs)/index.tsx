@@ -1,5 +1,7 @@
+// index.tsx
+
 import React from 'react';
-import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { supabase } from '@/utils/supabase';
@@ -53,7 +55,9 @@ export default function Index() {
         setSelectedImage(localUri);
 
         try {
+          setIsModalVisible(true); // Open modal immediately after image is selected
           setIsLoading(true); // Start loading
+
           const fileName = image.fileName || `uploaded_image_${Date.now()}.jpg`;
           console.log('Preparing to upload:', fileName);
           const uploadedUrl = await uploadImageToSupabase(localUri, fileName, image);
@@ -66,12 +70,12 @@ export default function Index() {
 
           // Update the ingredients state with the data from the API
           setIngredients(analysisResult.ingredients);
-          setIsModalVisible(true); // Open modal automatically
+          setIsLoading(false); // Stop loading
         } catch (error: any) {
           console.error('Error processing image and analyzing ingredients:', error);
           Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
-        } finally {
           setIsLoading(false); // Stop loading
+          setIsModalVisible(false); // Close modal if there's an error
         }
       } else {
         Alert.alert('No Image Selected', 'You did not select any image.');
@@ -188,6 +192,7 @@ export default function Index() {
     setImageUrl(undefined);
     setIngredients([]);
     setIsModalVisible(false);
+    setIsLoading(false);
     console.log('App state has been reset.');
   };
 
@@ -201,15 +206,7 @@ export default function Index() {
       <View style={styles.imageContainer}>
         <ImageViewer imgSource={PlaceholderImage} selectedImage={selectedImage} />
       </View>
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff6a55" />
-        </View>
-      )}
-      {!isLoading && selectedImage && ingredients.length > 0 && (
-        <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
-      )}
-      {selectedImage && !isLoading && ingredients.length > 0 && (
+      {selectedImage && (
         <View style={styles.optionsContainer}>
           <View style={styles.optionsRow}>
             <IconButton icon="refresh" label="Reset" onPress={onReset} />
@@ -221,8 +218,10 @@ export default function Index() {
           <Button theme="primary" label="Choose a photo" onPress={pickImageAsync} />
         </View>
       )}
-      <IngredientResults isVisible={isModalVisible} onClose={onModalClose}>
-        <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+      <IngredientResults isVisible={isModalVisible} onClose={onModalClose} isLoading={isLoading}>
+        {!isLoading && ingredients.length > 0 && (
+          <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+        )}
       </IngredientResults>
     </View>
   );
@@ -252,10 +251,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 20,
-  },
-  loadingContainer: {
-    position: 'absolute',
-    top: '50%',
-    alignItems: 'center',
   },
 });

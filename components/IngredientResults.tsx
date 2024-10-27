@@ -1,15 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import Modal from 'react-native-modal';
+import LottieView from 'lottie-react-native';
 
 type Props = React.PropsWithChildren<{
   isVisible: boolean;
   onClose: () => void;
+  isLoading: boolean;
 }>;
 
 const { height } = Dimensions.get('window');
 
-export default function IngredientResults({ isVisible, children, onClose }: Props) {
+export default function IngredientResults({ isVisible, children, onClose, isLoading }: Props) {
   return (
     <Modal
       isVisible={isVisible}
@@ -31,7 +33,18 @@ export default function IngredientResults({ isVisible, children, onClose }: Prop
             </View>
           </TouchableOpacity>
         </View>
-        {children}
+        {isLoading ? (
+          <View style={styles.animationContainer}>
+            <LottieView
+              source={require('@/assets/animations/analyzeAnimation.json')}
+              autoPlay
+              loop
+              style={styles.lottie}
+            />
+          </View>
+        ) : (
+          children
+        )}
       </View>
     </Modal>
   );
@@ -68,5 +81,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ff6a55',
+  },
+  animationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lottie: {
+    width: 200,
+    height: 200,
   },
 });
