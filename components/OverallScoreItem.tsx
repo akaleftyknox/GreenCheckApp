@@ -40,7 +40,7 @@ export default function OverallScoreItem({ overallScore }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 12,
+    marginBottom: 12,
     backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     paddingHorizontal: 20,

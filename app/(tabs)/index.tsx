@@ -63,7 +63,8 @@ export default function Index() {
           setIngredients(analysisResult.ingredients);
           setIsLoading(false);
 
-          fetchOverallScore(analysisResult.ingredients);
+          // Calculate overall score locally
+          calculateOverallScore(analysisResult.ingredients);
         } catch (error: any) {
           console.error('Error processing image and analyzing ingredients:', error);
           Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
@@ -79,38 +80,29 @@ export default function Index() {
     }
   };
 
-  const fetchOverallScore = async (analyzedIngredients: Ingredient[]) => {
-    try {
-      const response = await fetch('https://green-check.vercel.app/api/overallToxicityScore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analyzedIngredients }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error calculating overall toxicity score');
-      }
-
-      const data = await response.json();
-      setOverallScore(data.overallScore);
-    } catch (error: any) {
-      console.error('Error fetching overall toxicity score:', error);
+  const calculateOverallScore = (analyzedIngredients: Ingredient[]) => {
+    const toxicityScores = analyzedIngredients
+      .map((ingredient: Ingredient) => ingredient.toxicityRating)
+      .filter((score) => score > 0);
+    const n = toxicityScores.length;
+    if (n === 0) {
+      setOverallScore(null);
+      return;
     }
+    const sumOfReciprocals = toxicityScores.reduce((sum, score) => sum + 1 / score, 0);
+    const harmonicMean = n / sumOfReciprocals;
+    setOverallScore(harmonicMean);
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string, image: any): Promise<string> => {
     try {
-      console.log('Fetching image from URI...');
       const response = await fetch(uri);
 
-      console.log('Response status:', response.status);
       if (!response.ok) {
         throw new Error('Failed to fetch the image from the URI.');
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      console.log('ArrayBuffer Length:', arrayBuffer.byteLength);
 
       if (arrayBuffer.byteLength === 0) {
         throw new Error('ArrayBuffer is empty. No content to upload.');
@@ -118,12 +110,9 @@ export default function Index() {
 
       const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpeg';
       const path = `${Date.now()}.${fileExt}`;
-      console.log('Upload Path:', path);
 
       const contentType = getMimeType(fileName);
-      console.log('Content Type:', contentType);
 
-      console.log('Uploading to Supabase...');
       const { data, error: uploadError } = await supabase.storage.from('images').upload(path, arrayBuffer, {
         cacheControl: '3600',
         upsert: false,
@@ -135,21 +124,12 @@ export default function Index() {
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      console.log('Upload Data:', data);
-
-      console.log('Retrieving public URL...');
-      const { data: publicURLData, error: urlError } = supabase.storage.from('images').getPublicUrl(path);
-
-      if (urlError) {
-        console.error('URL Retrieval Error:', urlError);
-        throw new Error(`Failed to retrieve public URL: ${urlError.message}`);
-      }
+      const { data: publicURLData } = supabase.storage.from('images').getPublicUrl(path);
 
       if (!publicURLData || !publicURLData.publicUrl) {
         throw new Error('Unable to retrieve public URL');
       }
 
-      console.log('Public URL:', publicURLData.publicUrl);
       return publicURLData.publicUrl;
     } catch (error: any) {
       console.error('uploadImageToSupabase Error:', error);
@@ -159,7 +139,6 @@ export default function Index() {
 
   const checkIngredients = async (imageUrl: string) => {
     try {
-      console.log('Starting process image request...');
       const processResponse = await fetch('https://green-check.vercel.app/api/processImage', {
         method: 'POST',
         headers: {
@@ -174,9 +153,7 @@ export default function Index() {
       }
 
       const processData = await processResponse.json();
-      console.log('Process image response:', processData);
 
-      console.log('Starting analyze ingredients request...');
       const analyzeResponse = await fetch('https://green-check.vercel.app/api/analyzeIngredients', {
         method: 'POST',
         headers: {
@@ -191,7 +168,6 @@ export default function Index() {
       }
 
       const analyzeData = await analyzeResponse.json();
-      console.log('Analysis result:', analyzeData.analysis);
       return analyzeData.analysis;
     } catch (error: any) {
       console.error('Error in ingredient analysis chain:', error);
@@ -203,14 +179,13 @@ export default function Index() {
     setSelectedImage(undefined);
     setImageUrl(undefined);
     setIngredients([]);
+    setOverallScore(null);
     setIsModalVisible(false);
     setIsLoading(false);
-    console.log('App state has been reset.');
   };
 
   const onModalClose = () => {
     onReset();
-    console.log('Modal has been closed and app state reset.');
   };
 
   return (
@@ -232,7 +207,11 @@ export default function Index() {
       )}
       <IngredientResults isVisible={isModalVisible} onClose={onModalClose} isLoading={isLoading}>
         {!isLoading && ingredients.length > 0 && (
-          <IngredientList ingredients={ingredients} overallScore={overallScore} onCloseModal={onModalClose} />
+          <IngredientList
+            ingredients={ingredients}
+            overallScore={overallScore}
+            onCloseModal={onModalClose}
+          />
         )}
       </IngredientResults>
     </View>

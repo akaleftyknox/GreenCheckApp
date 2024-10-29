@@ -34,21 +34,21 @@ export default function IngredientList({ ingredients, overallScore, onCloseModal
   }
 
   const data = [
-    { key: 'overallScore' },
-    ...ingredients.map((ingredient) => ({ key: ingredient.id, ingredient })),
+    { key: 'overallScore', type: 'overallScore' },
+    ...ingredients.map((ingredient) => ({ key: ingredient.id, type: 'ingredient', ingredient })),
   ];
 
   const renderItem = ({ item }: { item: any }) => {
-    if (item.key === 'overallScore') {
+    if (item.type === 'overallScore') {
       if (overallScore !== null) {
         return <OverallScoreItem overallScore={overallScore} />;
       } else {
         return null;
       }
-    } else {
+    } else if (item.type === 'ingredient') {
       const ingredient = item.ingredient;
       return (
-        <View style={styles.pressable} key={ingredient.id}>
+        <View style={styles.itemContainer}>
           <IngredientItem
             title={ingredient.title}
             toxicityRating={ingredient.toxicityRating}
@@ -56,27 +56,34 @@ export default function IngredientList({ ingredients, overallScore, onCloseModal
           />
         </View>
       );
+    } else {
+      return null;
     }
   };
 
   return (
-    <FlatList
-      data={data}
-      keyExtractor={(item) => item.key}
-      renderItem={renderItem}
-      contentContainerStyle={styles.listContainer}
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled={true}
-    />
+    <View style={styles.container}>
+      <FlatList
+        data={data}
+        keyExtractor={(item) => item.key}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   listContainer: {
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
-  pressable: {
+  itemContainer: {
     marginBottom: 12,
   },
   centered: {
