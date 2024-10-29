@@ -1,6 +1,9 @@
+// IngredientList.tsx
+
 import React from 'react';
-import { StyleSheet, FlatList, Pressable, ActivityIndicator, View } from 'react-native';
+import { StyleSheet, FlatList, View, ActivityIndicator } from 'react-native';
 import IngredientItem from '@/components/IngredientItem';
+import OverallScoreItem from '@/components/OverallScoreItem';
 import IngredientsNotFound from '@/components/IngredientsNotFound';
 
 type Ingredient = {
@@ -12,27 +15,12 @@ type Ingredient = {
 
 type Props = {
   ingredients: Ingredient[];
+  overallScore: number | null;
   onCloseModal: () => void;
   isLoading?: boolean;
 };
 
-export default function IngredientList({ ingredients, onCloseModal, isLoading = false }: Props) {
-  const renderItem = ({ item }: { item: Ingredient }) => (
-    <Pressable
-      onPress={() => {
-        onCloseModal();
-      }}
-      style={styles.pressable}
-      key={item.id}
-    >
-      <IngredientItem
-        title={item.title}
-        toxicityRating={item.toxicityRating}
-        description={item.description}
-      />
-    </Pressable>
-  );
-
+export default function IngredientList({ ingredients, overallScore, onCloseModal, isLoading = false }: Props) {
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -45,23 +33,45 @@ export default function IngredientList({ ingredients, onCloseModal, isLoading = 
     return <IngredientsNotFound />;
   }
 
+  const data = [
+    { key: 'overallScore' },
+    ...ingredients.map((ingredient) => ({ key: ingredient.id, ingredient })),
+  ];
+
+  const renderItem = ({ item }: { item: any }) => {
+    if (item.key === 'overallScore') {
+      if (overallScore !== null) {
+        return <OverallScoreItem overallScore={overallScore} />;
+      } else {
+        return null;
+      }
+    } else {
+      const ingredient = item.ingredient;
+      return (
+        <View style={styles.pressable} key={ingredient.id}>
+          <IngredientItem
+            title={ingredient.title}
+            toxicityRating={ingredient.toxicityRating}
+            description={ingredient.description}
+          />
+        </View>
+      );
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={ingredients}
-        keyExtractor={(item: Ingredient) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+    <FlatList
+      data={data}
+      keyExtractor={(item) => item.key}
+      renderItem={renderItem}
+      contentContainerStyle={styles.listContainer}
+      showsVerticalScrollIndicator={false}
+      nestedScrollEnabled={true}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   listContainer: {
     paddingHorizontal: 24,
     paddingVertical: 16,

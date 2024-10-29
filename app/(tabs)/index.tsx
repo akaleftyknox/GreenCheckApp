@@ -29,19 +29,17 @@ export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [overallScore, setOverallScore] = useState<number | null>(null);
 
   const pickImageAsync = async () => {
     try {
-      console.log('Requesting media library permissions...');
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (permissionResult.granted === false) {
         Alert.alert('Permission to access camera roll is required!');
-        console.log('Permission denied.');
         return;
       }
 
-      console.log('Launching image library...');
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -51,39 +49,53 @@ export default function Index() {
       if (!result.canceled) {
         const image = result.assets[0];
         const localUri = image.uri;
-        console.log('Selected Image URI:', localUri);
         setSelectedImage(localUri);
 
         try {
-          setIsModalVisible(true); // Open modal immediately after image is selected
-          setIsLoading(true); // Start loading
+          setIsModalVisible(true);
+          setIsLoading(true);
 
           const fileName = image.fileName || `uploaded_image_${Date.now()}.jpg`;
-          console.log('Preparing to upload:', fileName);
           const uploadedUrl = await uploadImageToSupabase(localUri, fileName, image);
           setImageUrl(uploadedUrl);
 
-          console.log('Image uploaded to Supabase. URL:', uploadedUrl);
-
-          // Call the serverless function to check for ingredients
           const analysisResult = await checkIngredients(uploadedUrl);
-
-          // Update the ingredients state with the data from the API
           setIngredients(analysisResult.ingredients);
-          setIsLoading(false); // Stop loading
+          setIsLoading(false);
+
+          fetchOverallScore(analysisResult.ingredients);
         } catch (error: any) {
           console.error('Error processing image and analyzing ingredients:', error);
           Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
-          setIsLoading(false); // Stop loading
-          setIsModalVisible(false); // Close modal if there's an error
+          setIsLoading(false);
+          setIsModalVisible(false);
         }
       } else {
         Alert.alert('No Image Selected', 'You did not select any image.');
-        console.log('Image selection canceled.');
       }
     } catch (error: any) {
       console.error('Unexpected error in pickImageAsync:', error);
       Alert.alert('Unexpected Error', error.message || 'An unexpected error occurred.');
+    }
+  };
+
+  const fetchOverallScore = async (analyzedIngredients: Ingredient[]) => {
+    try {
+      const response = await fetch('https://green-check.vercel.app/api/overallToxicityScore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analyzedIngredients }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error calculating overall toxicity score');
+      }
+
+      const data = await response.json();
+      setOverallScore(data.overallScore);
+    } catch (error: any) {
+      console.error('Error fetching overall toxicity score:', error);
     }
   };
 
@@ -220,7 +232,7 @@ export default function Index() {
       )}
       <IngredientResults isVisible={isModalVisible} onClose={onModalClose} isLoading={isLoading}>
         {!isLoading && ingredients.length > 0 && (
-          <IngredientList ingredients={ingredients} onCloseModal={onModalClose} />
+          <IngredientList ingredients={ingredients} overallScore={overallScore} onCloseModal={onModalClose} />
         )}
       </IngredientResults>
     </View>

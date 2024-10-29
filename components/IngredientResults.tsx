@@ -15,9 +15,9 @@ export default function IngredientResults({ isVisible, children, onClose, isLoad
   return (
     <Modal
       isVisible={isVisible}
-      onBackdropPress={onClose}
-      onSwipeComplete={onClose}
-      swipeDirection="down"
+      // Provide empty functions to prevent closing the modal
+      onBackdropPress={() => {}} // Disable closing modal when tapping outside
+      swipeDirection={[]} // Disable swipe gestures
       style={styles.modal}
       backdropTransitionOutTiming={0}
       animationIn="slideInUp"
@@ -44,9 +44,7 @@ export default function IngredientResults({ isVisible, children, onClose, isLoad
             />
           </View>
         ) : (
-          <View style={styles.contentContainer}>
-            {children}
-          </View>
+          <View style={styles.contentContainer}>{children}</View>
         )}
       </View>
     </Modal>
@@ -59,7 +57,7 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   modalContent: {
-    maxHeight: height * 0.8, // Allow content to scroll if it exceeds max height
+    height: height * 0.8, // Fixed height for the modal
     width: '100%',
     backgroundColor: '#25292e',
     borderTopRightRadius: 18,
@@ -89,11 +87,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  contentContainer: {
+    flex: 1, // Allows the ingredient list to take available space
+  },
   lottie: {
     width: 200,
     height: 200,
-  },
-  contentContainer: {
-    flex: 1,
   },
 });

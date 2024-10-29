@@ -77,7 +77,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
           ],
           response_format: zodResponseFormat(IngredientAnalysisSchema, 'ingredient_analysis'),
           temperature: 0.1,
-          max_tokens: 1000,
+          max_tokens: 2000,
         });
 
         console.log(`Batch completed in ${Date.now() - startTime}ms`);
