@@ -22,6 +22,7 @@ export default function IngredientResults({ isVisible, children, onClose, isLoad
       backdropTransitionOutTiming={0}
       animationIn="slideInUp"
       animationOut="slideOutDown"
+      propagateSwipe={true} // Allow inner scroll views to scroll
     >
       <View style={styles.modalContent}>
         <View style={styles.sheetHeader}>
@@ -43,7 +44,9 @@ export default function IngredientResults({ isVisible, children, onClose, isLoad
             />
           </View>
         ) : (
-          children
+          <View style={styles.contentContainer}>
+            {children}
+          </View>
         )}
       </View>
     </Modal>
@@ -56,12 +59,11 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   modalContent: {
-    height: height * 0.8, // 80% of screen height
+    maxHeight: height * 0.8, // Allow content to scroll if it exceeds max height
     width: '100%',
     backgroundColor: '#25292e',
     borderTopRightRadius: 18,
     borderTopLeftRadius: 18,
-    paddingBottom: 20,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -90,5 +92,8 @@ const styles = StyleSheet.create({
   lottie: {
     width: 200,
     height: 200,
+  },
+  contentContainer: {
+    flex: 1,
   },
 });
