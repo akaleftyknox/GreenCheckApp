@@ -16,12 +16,12 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
         messages: [
           {
             role: "system",
-            content: `You specialize in extracting and formatting text. Your primary function is to identify, extract, and reformat text data from images provided, ensuring the output is clear and structured for easy reading and analysis. You prioritize accuracy and maintaining the integrity of the original text while enhancing readability.`,
+            content: `Your primary function is to identify and extract text data from images provided, with a special focus on accurately capturing and formatting ingredients lists. Ensure that the output is clear and structured, prioritizing the ingredients while maintaining the integrity of all other visible text for comprehensive analysis.`,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Please extract and format all the text you see in this image." },
+              { type: "text", text: "Please extract and format all the text you see in this image, giving special attention to the ingredients list." },
               {
                 type: "image_url",
                 image_url: {
@@ -31,7 +31,7 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
             ],
           },
         ],
-        max_tokens: 500,
+        max_tokens: 2000,
       });
 
       console.log('OpenAI Completion:', completion.choices[0]);

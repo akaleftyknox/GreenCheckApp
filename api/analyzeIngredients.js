@@ -64,15 +64,15 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
           messages: [
             {
               role: 'system',
-              content: `You are a Consumer Safety Analyst. For each ingredient, provide:
-              - The exact ingredient name as ingredientTitle
-              - A safety rating (0-10, 0 safest) as ingredientRating
-              - A brief, concise description as ingredientDescription
-              Be concise but accurate.`,
+              content: `You are a Consumer Safety Analyst specialized in ingredient safety evaluation. For each ingredient provided, focus strictly on the following tasks:
+              - Extract and list the exact name of the ingredient as 'ingredientTitle'.
+              - Assign a safety rating ranging from 0 (safest) to 10 (least safe) as 'ingredientRating'.
+              - Provide a factual, concise consumer-friendly description of the ingredient as 'ingredientDescription'.
+              Ignore all other text that does not pertain to ingredients directly. Ensure accuracy and brevity in your analysis.`,
             },
             {
               role: 'user',
-              content: `Analyze these ingredients: ${batchText}`,
+              content: `Analyze only the ingredients provided: ${batchText}`,
             },
           ],
           response_format: zodResponseFormat(IngredientAnalysisSchema, 'ingredient_analysis'),

@@ -1,5 +1,7 @@
+// IngredientResults.tsx
+
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import Modal from 'react-native-modal';
 import LottieView from 'lottie-react-native';
 
@@ -11,18 +13,22 @@ type Props = React.PropsWithChildren<{
 
 const { height } = Dimensions.get('window');
 
-export default function IngredientResults({ isVisible, children, onClose, isLoading }: Props) {
+export default function IngredientResults({
+  isVisible,
+  children,
+  onClose,
+  isLoading,
+}: Props) {
   return (
     <Modal
       isVisible={isVisible}
-      // Provide empty functions to prevent closing the modal
-      onBackdropPress={() => {}} // Disable closing modal when tapping outside
-      swipeDirection={[]} // Disable swipe gestures
+      onBackdropPress={() => {}}
+      swipeDirection={[]}
       style={styles.modal}
       backdropTransitionOutTiming={0}
       animationIn="slideInUp"
       animationOut="slideOutDown"
-      propagateSwipe={true} // Allow inner scroll views to scroll
+      propagateSwipe={true}
     >
       <View style={styles.modalContent}>
         <View style={styles.sheetHeader}>
@@ -57,7 +63,7 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   modalContent: {
-    height: height * 0.8, // Fixed height for the modal
+    maxHeight: height * 0.8,
     width: '100%',
     backgroundColor: '#25292e',
     borderTopRightRadius: 18,
@@ -83,12 +89,12 @@ const styles = StyleSheet.create({
     color: '#ff6a55',
   },
   animationContainer: {
-    flex: 1,
+    height: height * 0.8 - 70, // Adjust height to account for header
     justifyContent: 'center',
     alignItems: 'center',
   },
   contentContainer: {
-    flex: 1, // Allows the ingredient list to take available space
+    flexShrink: 1,
   },
   lottie: {
     width: 200,

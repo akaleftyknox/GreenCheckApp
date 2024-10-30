@@ -1,4 +1,4 @@
-// index.tsx
+// app/(tabs)/index.tsx
 
 import React from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
@@ -9,10 +9,10 @@ import { supabase } from '@/utils/supabase';
 import Button from '@/components/Button';
 import ImageViewer from '@/components/ImageViewer';
 import IconButton from '@/components/IconButton';
-import IngredientResults from '@/components/IngredientResults';
-import IngredientList from '@/components/IngredientList';
-
 import { getMimeType } from '@/utils/getMimeType';
+import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
 
 const PlaceholderImage = require('@/assets/images/background-image.png');
 
@@ -25,11 +25,9 @@ type Ingredient = {
 
 export default function Index() {
   const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
-  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [overallScore, setOverallScore] = useState<number | null>(null);
+
+  const router = useRouter();
 
   const pickImageAsync = async () => {
     try {
@@ -52,24 +50,30 @@ export default function Index() {
         setSelectedImage(localUri);
 
         try {
-          setIsModalVisible(true);
           setIsLoading(true);
 
           const fileName = image.fileName || `uploaded_image_${Date.now()}.jpg`;
-          const uploadedUrl = await uploadImageToSupabase(localUri, fileName, image);
-          setImageUrl(uploadedUrl);
+          const uploadedUrl = await uploadImageToSupabase(localUri, fileName);
 
           const analysisResult = await checkIngredients(uploadedUrl);
-          setIngredients(analysisResult.ingredients);
+          const ingredients = analysisResult.ingredients;
+
+          const overallScore = calculateOverallScore(ingredients);
+
           setIsLoading(false);
 
-          // Calculate overall score locally
-          calculateOverallScore(analysisResult.ingredients);
+          router.push({
+            pathname: '/ScanResults',
+            params: {
+              imageUrl: uploadedUrl,
+              ingredients: JSON.stringify(ingredients),
+              overallScore: overallScore ? overallScore.toString() : '0',
+            },
+          });
         } catch (error: any) {
           console.error('Error processing image and analyzing ingredients:', error);
           Alert.alert('Error', error.message || 'An error occurred while analyzing the ingredients.');
           setIsLoading(false);
-          setIsModalVisible(false);
         }
       } else {
         Alert.alert('No Image Selected', 'You did not select any image.');
@@ -86,38 +90,34 @@ export default function Index() {
       .filter((score) => score > 0);
     const n = toxicityScores.length;
     if (n === 0) {
-      setOverallScore(null);
-      return;
+      return null;
     }
     const sumOfReciprocals = toxicityScores.reduce((sum, score) => sum + 1 / score, 0);
     const harmonicMean = n / sumOfReciprocals;
-    setOverallScore(harmonicMean);
+    return harmonicMean;
   };
 
-  const uploadImageToSupabase = async (uri: string, fileName: string, image: any): Promise<string> => {
+  const uploadImageToSupabase = async (uri: string, fileName: string): Promise<string> => {
     try {
-      const response = await fetch(uri);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch the image from the URI.');
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-
-      if (arrayBuffer.byteLength === 0) {
-        throw new Error('ArrayBuffer is empty. No content to upload.');
-      }
-
-      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpeg';
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `${Date.now()}.${fileExt}`;
 
       const contentType = getMimeType(fileName);
 
-      const { data, error: uploadError } = await supabase.storage.from('images').upload(path, arrayBuffer, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: contentType,
+      // Read the file into a binary format
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+
+      const buffer = Buffer.from(base64, 'base64');
+
+      const { data, error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(path, buffer, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: contentType,
+        });
 
       if (uploadError) {
         console.error('Upload Error:', uploadError);
@@ -175,19 +175,6 @@ export default function Index() {
     }
   };
 
-  const onReset = () => {
-    setSelectedImage(undefined);
-    setImageUrl(undefined);
-    setIngredients([]);
-    setOverallScore(null);
-    setIsModalVisible(false);
-    setIsLoading(false);
-  };
-
-  const onModalClose = () => {
-    onReset();
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.imageContainer}>
@@ -196,7 +183,7 @@ export default function Index() {
       {selectedImage && (
         <View style={styles.optionsContainer}>
           <View style={styles.optionsRow}>
-            <IconButton icon="refresh" label="Reset" onPress={onReset} />
+            <IconButton icon="refresh" label="Reset" onPress={() => setSelectedImage(undefined)} />
           </View>
         </View>
       )}
@@ -205,15 +192,6 @@ export default function Index() {
           <Button theme="primary" label="Choose a photo" onPress={pickImageAsync} />
         </View>
       )}
-      <IngredientResults isVisible={isModalVisible} onClose={onModalClose} isLoading={isLoading}>
-        {!isLoading && ingredients.length > 0 && (
-          <IngredientList
-            ingredients={ingredients}
-            overallScore={overallScore}
-            onCloseModal={onModalClose}
-          />
-        )}
-      </IngredientResults>
     </View>
   );
 }
