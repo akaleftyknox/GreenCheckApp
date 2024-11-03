@@ -1,4 +1,4 @@
-// Import necessary modules
+// api/analyzeIngredients.js
 const OpenAI = require('openai');
 const { v4: uuidv4 } = require('uuid');
 const corsMiddleware = require('../utils/corsMiddleware.js');
@@ -17,20 +17,22 @@ const IngredientAnalysisSchema = z.object({
   ),
 });
 
-// Instantiate the OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Function to delay execution
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Function to transform ingredients
 function transformIngredients(analysisResult) {
+  if (!analysisResult || !analysisResult.ingredients) {
+    console.error('Invalid analysis result:', analysisResult);
+    throw new Error('Invalid analysis result structure');
+  }
+
   return {
-    scanTitle: analysisResult.scanTitle,
+    scanTitle: analysisResult.scanTitle || null,
     ingredients: analysisResult.ingredients.map((ing) => ({
       id: uuidv4(),
       title: ing.ingredientTitle,
@@ -40,7 +42,6 @@ function transformIngredients(analysisResult) {
   };
 }
 
-// Function to handle retries
 async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDelay = 2000) {
   console.log('Starting analysis with OpenAI configuration.');
 
@@ -52,6 +53,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
 
   const BATCH_SIZE = 5;
   let allIngredients = [];
+  let scanTitle = null;
 
   for (let i = 0; i < ingredientsList.length; i += BATCH_SIZE) {
     const batchIngredients = ingredientsList.slice(i, i + BATCH_SIZE);
@@ -88,10 +90,16 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
         console.log(`Batch completed in ${Date.now() - startTime}ms`);
 
         const response = completion.choices[0].message.parsed;
+        
+        // Store scanTitle from first batch only
+        if (i === 0) {
+          scanTitle = response.scanTitle;
+        }
+        
         allIngredients = [...allIngredients, ...response.ingredients];
         break;
       } catch (error) {
-        const errorDetails = {
+        console.error('Batch analysis failed:', {
           name: error.name,
           message: error.message,
           status: error?.status,
@@ -99,9 +107,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
           code: error?.code,
           attempt: 4 - retryCount,
           batch: i / BATCH_SIZE + 1,
-        };
-
-        console.error('Batch analysis failed:', errorDetails);
+        });
 
         if (retryCount === 1) {
           throw new Error(`Final attempt failed for batch ${i / BATCH_SIZE + 1}: ${error.message}`);
@@ -113,14 +119,15 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
     }
   }
 
-  const transformedIngredients = transformIngredients(allIngredients);
-
-  return {
-    ingredients: transformedIngredients,
+  // Transform all ingredients together with the scanTitle
+  const transformedResult = {
+    scanTitle,
+    ingredients: allIngredients,
   };
+
+  return transformIngredients(transformedResult);
 }
 
-// Wrapper function to add additional functionality without modifying the handler
 const withWrapper = (handler) => async (req, res) => {
   console.log('Wrapper: Incoming request', {
     method: req.method,
@@ -134,12 +141,9 @@ const withWrapper = (handler) => async (req, res) => {
     console.log('Wrapper: Handler executed successfully.');
   } catch (error) {
     console.error('Wrapper: Error during handler execution:', error);
-    // Optionally, send a generic error response if not already handled
     if (!res.headersSent) {
       res.status(500).json({ error: 'An unexpected error occurred.' });
     }
-  } finally {
-    console.log('Wrapper: Request processing completed.');
   }
 };
 
@@ -159,6 +163,7 @@ const handler = async (req, res) => {
     console.log('Starting ingredient analysis...');
 
     const analysisResult = await analyzeIngredientsWithRetry(extractedText);
+    console.log('Analysis result:', analysisResult);
 
     console.log(`Analysis completed in ${Date.now() - startTime}ms`);
 
@@ -180,5 +185,4 @@ const handler = async (req, res) => {
   }
 };
 
-// Export the wrapped handler with CORS middleware
 module.exports = corsMiddleware(withWrapper(handler));
