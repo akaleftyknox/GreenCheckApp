@@ -7,6 +7,7 @@ const { zodResponseFormat } = require('openai/helpers/zod');
 
 // Define the schema for ingredient analysis using zod
 const IngredientAnalysisSchema = z.object({
+  scanTitle: z.string().nullable(),
   ingredients: z.array(
     z.object({
       ingredientTitle: z.string().nullable(),
@@ -27,13 +28,16 @@ function delay(ms) {
 }
 
 // Function to transform ingredients
-function transformIngredients(openAIIngredients) {
-  return openAIIngredients.map((ing) => ({
-    id: uuidv4(),
-    title: ing.ingredientTitle,
-    toxicityRating: ing.ingredientRating,
-    description: ing.ingredientDescription,
-  }));
+function transformIngredients(analysisResult) {
+  return {
+    scanTitle: analysisResult.scanTitle,
+    ingredients: analysisResult.ingredients.map((ing) => ({
+      id: uuidv4(),
+      title: ing.ingredientTitle,
+      toxicityRating: ing.ingredientRating,
+      description: ing.ingredientDescription,
+    })),
+  };
 }
 
 // Function to handle retries
@@ -64,7 +68,8 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
           messages: [
             {
               role: 'system',
-              content: `You are a Consumer Safety Analyst specialized in ingredient safety evaluation. For each ingredient provided, focus strictly on the following tasks:
+              content: `You are a Consumer Safety Analyst specialized in ingredient safety evaluation.
+              First, identify and output a 1-3 word product description as 'scanTitle'. Then, for each ingredient provided, focus strictly on the following tasks:
               - Extract and list the exact name of the ingredient as 'ingredientTitle'.
               - Assign a safety rating ranging from 0 (safest) to 10 (least safe) as 'ingredientRating'.
               - Provide a factual, concise consumer-friendly description of the ingredient as 'ingredientDescription'.
@@ -72,7 +77,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
             },
             {
               role: 'user',
-              content: `Analyze only the ingredients provided: ${batchText}`,
+              content: `Analyze only the product description and ingredients provided: ${batchText}`,
             },
           ],
           response_format: zodResponseFormat(IngredientAnalysisSchema, 'ingredient_analysis'),

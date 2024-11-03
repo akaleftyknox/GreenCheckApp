@@ -1,25 +1,27 @@
-import React, { useRef, useLayoutEffect } from 'react';
+// app/ScanResults.tsx
+
+import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Animated,
-  ScrollView,
   Image,
-  TouchableOpacity,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { getScanWithIngredients } from '@/utils/db';
+import { getGradeInfo, getIngredientGradeInfo } from '@/utils/gradeUtils';
 import GreenCheckSvg24 from '@/assets/images/greenCheckSvg_24.svg';
 import GreenCheckSvg17 from '@/assets/images/greenCheckSvg_17.svg';
+import { ScanIngredient } from '@/types/database';
 
 const SECTION_TOP_OFFSET = 300;
 const SECTION_BORDER_RADIUS = 40;
 
 type Ingredient = {
-  id: string;
   title: string;
-  toxicityRating: number;
+  toxicity_rating: number;
   description: string;
 };
 
@@ -40,78 +42,51 @@ export default function ScanResults() {
   const params = useLocalSearchParams();
   const navigation = useNavigation();
 
-  const imageUrl = params.imageUrl as string;
-  const ingredients: Ingredient[] = JSON.parse(params.ingredients as string);
-  const overallScore = parseFloat(params.overallScore as string);
+  const scanId = params.scanId as string | undefined;
+  const imageUrlParam = params.imageUrl as string | undefined;
+  const ingredientsParam = params.ingredients as string | undefined;
+  const overallScoreParam = params.overallScore as string | undefined;
 
-  const getGradeInfo = (score: number) => {
-    let grade = '';
-    let ratingDescription = '';
-    let badgeBackgroundColor = '#FFFFFF';
-    const badgeFontColor = '#FFFFFF'; // Always white
-    let backgroundColor = '#FFFFFF';
+  const [ingredients, setIngredients] = useState<Ingredient[] | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [overallScore, setOverallScore] = useState<number>(0);
 
-    if (score <= 1) {
-      badgeBackgroundColor = '#014737';
-      backgroundColor = '#BCF0DA';
-      grade = 'A+';
-      ratingDescription = 'This product is as clean as it gets';
-    } else if (score <= 2) {
-      badgeBackgroundColor = '#014737';
-      backgroundColor = '#BCF0DA';
-      grade = 'A';
-      ratingDescription = 'Very low toxicity, very safe';
-    } else if (score <= 4) {
-      badgeBackgroundColor = '#633112';
-      backgroundColor = '#FCE96A';
-      grade = 'B';
-      ratingDescription = 'Low toxicity, safe for use';
-    } else if (score <= 6) {
-      badgeBackgroundColor = '#633112';
-      backgroundColor = '#FCE96A';
-      grade = 'C';
-      ratingDescription = 'Moderate toxicity, use caution';
-    } else if (score <= 8) {
-      badgeBackgroundColor = '#771D1D';
-      backgroundColor = '#FBD5D5';
-      grade = 'D';
-      ratingDescription = 'High toxicity, limit usage';
-    } else {
-      badgeBackgroundColor = '#771D1D';
-      backgroundColor = '#FBD5D5';
-      grade = 'F';
-      ratingDescription = 'Very high toxicity, avoid use';
-    }
+  useEffect(() => {
+    const fetchScanData = async () => {
+      try {
+        if (scanId) {
+          const { scan, ingredients } = await getScanWithIngredients(scanId);
+          setImageUrl(scan.image_url);
+          setOverallScore(scan.overall_grade);
 
-    return { grade, ratingDescription, badgeBackgroundColor, backgroundColor };
-  };
+          const formattedIngredients = ingredients.map((ing) => ({
+            title: ing.ingredient_title,
+            toxicity_rating: ing.toxicity_rating,
+            description: ing.description || 'No description available',
+          }));
+          setIngredients(formattedIngredients);
+        } else if (imageUrlParam && ingredientsParam && overallScoreParam) {
+          setImageUrl(imageUrlParam);
+          setOverallScore(parseFloat(overallScoreParam));
 
-  const getIngredientGradeInfo = (toxicityRating: number) => {
-    let grade = '';
-    let color = '#000000';
+          const parsedIngredients = JSON.parse(ingredientsParam);
+          const formattedIngredients = parsedIngredients.map((ing: any) => ({
+            title: ing.title,
+            toxicity_rating: ing.toxicityRating,
+            description: ing.description || 'No description available',
+          }));
+          setIngredients(formattedIngredients);
+        } else {
+          throw new Error('No scan data available');
+        }
+      } catch (error) {
+        console.error('Error fetching scan data:', error);
+        Alert.alert('Error', 'Could not fetch scan data.');
+      }
+    };
 
-    if (toxicityRating <= 1) {
-      color = '#014737';
-      grade = 'A+';
-    } else if (toxicityRating <= 2) {
-      color = '#014737';
-      grade = 'A';
-    } else if (toxicityRating <= 4) {
-      color = '#633112';
-      grade = 'B';
-    } else if (toxicityRating <= 6) {
-      color = '#633112';
-      grade = 'C';
-    } else if (toxicityRating <= 8) {
-      color = '#771D1D';
-      grade = 'D';
-    } else {
-      color = '#771D1D';
-      grade = 'F';
-    }
-
-    return { grade, color };
-  };
+    fetchScanData();
+  }, [scanId, imageUrlParam, ingredientsParam, overallScoreParam]);
 
   const { grade, ratingDescription, badgeBackgroundColor, backgroundColor } =
     getGradeInfo(overallScore);
@@ -125,11 +100,17 @@ export default function ScanResults() {
       headerTitleStyle: {
         color: badgeBackgroundColor,
       },
-      headerBackTitleStyle: {
-        color: badgeBackgroundColor,
-      },
+      headerBackTitle: 'Done',
     });
   }, [navigation, backgroundColor, badgeBackgroundColor]);
+
+  if (!imageUrl || !ingredients) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading scan data...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ backgroundColor: 'white', flex: 1 }}>
@@ -152,7 +133,7 @@ export default function ScanResults() {
           }}
         />
       </Animated.View>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.container}
         onScroll={Animated.event(
           [
@@ -191,12 +172,12 @@ export default function ScanResults() {
           </Text>
         </View>
         <View style={[styles.ingredientsOverlay, { backgroundColor }]}>
-          <View style={styles.lessons}>
-            <Text style={styles.lessonsTitle}>Ingredients</Text>
+          <View style={styles.ingredients}>
+            <Text style={styles.ingredientsTitle}>Ingredients</Text>
 
             {ingredients.map((ingredient, index) => {
               const { grade: ingredientGrade, color } =
-                getIngredientGradeInfo(ingredient.toxicityRating);
+                getIngredientGradeInfo(ingredient.toxicity_rating);
               return (
                 <View key={index} style={styles.card}>
                   {ingredientGrade === 'A+' ? (
@@ -223,28 +204,12 @@ export default function ScanResults() {
                       {ingredient.description}
                     </Text>
                   </View>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      // handle delete ingredient
-                    }}
-                    style={{
-                      marginLeft: 'auto',
-                    }}>
-                    <View style={styles.cardAction}>
-                      <Ionicons
-                        color="#9CA3AF"
-                        name="trash"
-                        size={20}
-                      />
-                    </View>
-                  </TouchableOpacity>
                 </View>
               );
             })}
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -298,17 +263,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  lessons: {
+  ingredients: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: SECTION_BORDER_RADIUS,
     borderTopRightRadius: SECTION_BORDER_RADIUS,
     paddingVertical: 32,
     paddingHorizontal: 24,
   },
-  ingredientsOverlay: {
-    // Background color set dynamically
-  },
-  lessonsTitle: {
+  ingredientsOverlay: {},
+  ingredientsTitle: {
     fontSize: 25,
     fontWeight: '700',
     color: '#111928',
@@ -335,13 +298,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: '#4B5563',
-  },
-  cardAction: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
   },
 });

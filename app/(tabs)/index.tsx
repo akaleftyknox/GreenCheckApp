@@ -1,11 +1,10 @@
-// app/(tabs)/index.tsx
+// app/index.tsx
 
 import React from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { supabase } from '@/utils/supabase';
-
 import Button from '@/components/Button';
 import ImageViewer from '@/components/ImageViewer';
 import IconButton from '@/components/IconButton';
@@ -13,6 +12,8 @@ import { getMimeType } from '@/utils/getMimeType';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer';
+import { createScan } from '@/utils/db';
+import { getGradeInfo } from '@/utils/gradeUtils';
 
 const PlaceholderImage = require('@/assets/images/background-image.png');
 
@@ -26,8 +27,11 @@ type Ingredient = {
 export default function Index() {
   const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-
   const router = useRouter();
+
+  const openCamera = () => {
+    router.push('/camera');
+  };
 
   const pickImageAsync = async () => {
     try {
@@ -60,6 +64,30 @@ export default function Index() {
 
           const overallScore = calculateOverallScore(ingredients);
 
+          // Get grade information
+          const { grade, ratingDescription } = getGradeInfo(overallScore || 0);
+
+          // Get current user (null if not authenticated)
+          const { data: { user } } = await supabase.auth.getUser();
+
+          // Save scan to database
+          const { error: dbError } = await createScan(user?.id, {
+            overall_grade: overallScore || 0,
+            overall_grade_description: ratingDescription,
+            image_url: uploadedUrl,
+            scan_title: null, // Will be implemented later
+            ingredients: ingredients.map((ing: any) => ({
+              title: ing.title,
+              toxicity_rating: ing.toxicityRating,
+              description: ing.description,
+            })),
+          });
+
+          if (dbError) {
+            console.error('Error saving scan to database:', dbError);
+            Alert.alert('Error', 'An error occurred while saving the scan data.');
+          }
+
           setIsLoading(false);
 
           router.push({
@@ -88,13 +116,16 @@ export default function Index() {
     const toxicityScores = analyzedIngredients
       .map((ingredient: Ingredient) => ingredient.toxicityRating)
       .filter((score) => score > 0);
-    const n = toxicityScores.length;
-    if (n === 0) {
+  
+    if (toxicityScores.length === 0) {
       return null;
     }
-    const sumOfReciprocals = toxicityScores.reduce((sum, score) => sum + 1 / score, 0);
-    const harmonicMean = n / sumOfReciprocals;
-    return harmonicMean;
+  
+    // Calculate the average toxicity score
+    const totalScore = toxicityScores.reduce((sum, score) => sum + score, 0);
+    const averageScore = totalScore / toxicityScores.length;
+  
+    return averageScore;
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string): Promise<string> => {
@@ -104,7 +135,6 @@ export default function Index() {
 
       const contentType = getMimeType(fileName);
 
-      // Read the file into a binary format
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
@@ -189,7 +219,10 @@ export default function Index() {
       )}
       {!selectedImage && (
         <View style={styles.footerContainer}>
-          <Button theme="primary" label="Choose a photo" onPress={pickImageAsync} />
+          <View style={styles.buttonRow}>
+            <Button theme="primary" label="Choose a photo" onPress={pickImageAsync} />
+            <Button theme="primary" label="Take a photo" onPress={openCamera} />
+          </View>
         </View>
       )}
     </View>
@@ -220,5 +253,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 20,
+  },
+  buttonRow: {
+    flexDirection: 'column',
+    gap: 16,
+    alignItems: 'center',
   },
 });

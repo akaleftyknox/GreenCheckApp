@@ -16,12 +16,12 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
         messages: [
           {
             role: "system",
-            content: `Your primary function is to identify and extract text data from images provided, with a special focus on accurately capturing and formatting ingredients lists. Ensure that the output is clear and structured, prioritizing the ingredients while maintaining the integrity of all other visible text for comprehensive analysis.`,
+            content: `Your primary function is to identify the product and text in the image and extract text data from the image provided, with a special focus on accurately capturing and formatting ingredients lists and describing the product. Ensure that the output is clear and structured, prioritizing the ingredients while maintaining the integrity of all other visible text for comprehensive analysis.`,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Please extract and format all the text you see in this image, giving special attention to the ingredients list." },
+              { type: "text", text: "Please extract and format all the text you see in this image, giving special attention to the ingredients list and 1 to 3 word product description." },
               {
                 type: "image_url",
                 image_url: {
