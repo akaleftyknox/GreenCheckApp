@@ -16,19 +16,23 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
         messages: [
           {
             role: "system",
-            content: `Your primary function is to identify the product and text in the image and extract text data from the image provided, with a special focus on accurately capturing and formatting ingredients lists and describing the product. Ensure that the output is clear and structured, prioritizing the ingredients while maintaining the integrity of all other visible text for comprehensive analysis.`,
+            "content": [
+              {
+                "type": "text",
+                "text": "Extract and analyze the text data from the provided image, focusing on identifying the product and capturing the ingredients list while ensuring no other unnecessary text is included.\n\nPay particular attention to accurately capturing the ingredient list in its original order, formatting it clearly, and excluding any text that follows the phrase \"made without.\"\n\n# Steps\n\n1. **Product Identification**: Identify the product name or title if visible in the image.\n2. **Ingredients Extraction**: Extract the ingredients list. Ensure that:\n   - Ingredients are captured in the correct order.\n   - The textual data is formatted in a clean, readable manner.\n   - Avoid extracting or including any text that follows \"made without.\"\n3. **Organization**: Present the result in a structured way that is easy to interpret.\n\n# Output Format\n\nProvide a structured JSON output in the following format:\n- **product_name**: The name of the product, if identifiable.\n- **ingredients_list**: List of ingredients captured from the image.\n  - Maintain the original order in a comma-separated string list.\n\nExample format:\n\n```json\n{\n  \"product_name\": \"[Product Name]\",\n  \"ingredients_list\": \"[Ingredient 1, Ingredient 2, Ingredient 3, ...]\"\n}\n```\n\n# Notes\n\n- Pay special attention to formatting the ingredients list clearly and maintaining the original sequence.\n- Avoid including any phrases or words that come after \"made without\" even if they appear elsewhere in the text.\n- If any text cannot be confidently recognized, mark it as `[unreadable text]`."
+              }
+            ]
           },
           {
-            role: "user",
-            content: [
-              { type: "text", text: "Please extract and format all the text you see in this image, giving special attention to the ingredients list and 1 to 3 word product description." },
+            "role": "user",
+            "content": [
               {
-                type: "image_url",
-                image_url: {
+                "type": "image_url",
+                "image_url": {
                   url: imageUrl,
                 },
-              },
-            ],
+              }
+            ]
           },
         ],
         max_tokens: 2000,

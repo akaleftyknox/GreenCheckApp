@@ -8,7 +8,9 @@ import {
   Animated,
   Image,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { getScanWithIngredients } from '@/utils/db';
 import { getGradeInfo, getIngredientGradeInfo } from '@/utils/gradeUtils';
@@ -27,6 +29,20 @@ type Ingredient = {
 
 export default function ScanResults() {
   const scrollY = useRef(new Animated.Value(0)).current;
+  const params = useLocalSearchParams();
+  const navigation = useNavigation();
+
+  const [ingredients, setIngredients] = useState<Ingredient[] | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [overallScore, setOverallScore] = useState<number>(0);
+  const [scanTitle, setScanTitle] = useState<string>('');
+
+  const scanId = params.scanId as string | undefined;
+  const imageUrlParam = params.imageUrl as string | undefined;
+  const ingredientsParam = params.ingredients as string | undefined;
+  const overallScoreParam = params.overallScore as string | undefined;
+  const scanTitleParam = params.scanTitle as string | undefined;
+
   const animatedBackgroundScale = scrollY.interpolate({
     inputRange: [
       -SECTION_TOP_OFFSET - 100,
@@ -39,18 +55,6 @@ export default function ScanResults() {
     outputRange: [1.5, 1.25, 1.1, 1, 0, 0],
   });
 
-  const params = useLocalSearchParams();
-  const navigation = useNavigation();
-
-  const scanId = params.scanId as string | undefined;
-  const imageUrlParam = params.imageUrl as string | undefined;
-  const ingredientsParam = params.ingredients as string | undefined;
-  const overallScoreParam = params.overallScore as string | undefined;
-
-  const [ingredients, setIngredients] = useState<Ingredient[] | null>(null);
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [overallScore, setOverallScore] = useState<number>(0);
-
   useEffect(() => {
     const fetchScanData = async () => {
       try {
@@ -58,6 +62,7 @@ export default function ScanResults() {
           const { scan, ingredients } = await getScanWithIngredients(scanId);
           setImageUrl(scan.image_url);
           setOverallScore(scan.overall_grade);
+          setScanTitle(scan.scan_title || 'Untitled Scan');
 
           const formattedIngredients = ingredients.map((ing) => ({
             title: ing.ingredient_title,
@@ -68,6 +73,7 @@ export default function ScanResults() {
         } else if (imageUrlParam && ingredientsParam && overallScoreParam) {
           setImageUrl(imageUrlParam);
           setOverallScore(parseFloat(overallScoreParam));
+          setScanTitle(scanTitleParam || 'New Scan');
 
           const parsedIngredients = JSON.parse(ingredientsParam);
           const formattedIngredients = parsedIngredients.map((ing: any) => ({
@@ -86,23 +92,51 @@ export default function ScanResults() {
     };
 
     fetchScanData();
-  }, [scanId, imageUrlParam, ingredientsParam, overallScoreParam]);
+  }, [scanId, imageUrlParam, ingredientsParam, overallScoreParam, scanTitleParam]);
 
   const { grade, ratingDescription, badgeBackgroundColor, backgroundColor } =
     getGradeInfo(overallScore);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerStyle: {
-        backgroundColor: backgroundColor,
-      },
-      headerTintColor: badgeBackgroundColor,
-      headerTitleStyle: {
-        color: badgeBackgroundColor,
-      },
-      headerBackTitle: 'Done',
-    });
-  }, [navigation, backgroundColor, badgeBackgroundColor]);
+    useLayoutEffect(() => {
+      navigation.setOptions({
+        title: scanTitle,
+        headerStyle: {
+          backgroundColor: backgroundColor,
+        },
+        headerTintColor: badgeBackgroundColor,
+        headerBackTitle: 'Done',
+        headerLeft: () => (
+          navigation.canGoBack() ? (
+            <TouchableOpacity 
+              onPress={() => navigation.goBack()}
+              style={{ 
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons 
+                name="chevron-back" 
+                size={24} 
+                color={badgeBackgroundColor} 
+                style={{ marginRight: 4 }}
+              />
+              <Text style={{ 
+                color: badgeBackgroundColor,
+                fontSize: 17,
+                fontWeight: '600',
+              }}>
+                Done
+              </Text>
+            </TouchableOpacity>
+          ) : null
+        ),
+        headerTitleStyle: {
+          color: badgeBackgroundColor,
+          fontWeight: '600',
+        },
+        headerShadowVisible: false,
+      });
+    }, [navigation, backgroundColor, badgeBackgroundColor, scanTitle]);
 
   if (!imageUrl || !ingredients) {
     return (
@@ -117,35 +151,21 @@ export default function ScanResults() {
       <Animated.View
         style={{
           transform: [
-            {
-              scaleX: animatedBackgroundScale,
-            },
-            {
-              scaleY: animatedBackgroundScale,
-            },
+            { scaleX: animatedBackgroundScale },
+            { scaleY: animatedBackgroundScale },
           ],
         }}>
         <Image
           style={styles.backdrop}
           resizeMode="cover"
-          source={{
-            uri: imageUrl,
-          }}
+          source={{ uri: imageUrl }}
         />
       </Animated.View>
       <Animated.ScrollView
         style={styles.container}
         onScroll={Animated.event(
-          [
-            {
-              nativeEvent: {
-                contentOffset: {
-                  y: scrollY,
-                },
-              },
-            },
-          ],
-          { useNativeDriver: false },
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
         )}
         scrollEventThrottle={1}>
         <View style={[styles.content, { backgroundColor }]}>
@@ -154,11 +174,7 @@ export default function ScanResults() {
               GreenGrade
             </Text>
 
-            <View
-              style={[
-                styles.headerBadge,
-                { backgroundColor: badgeBackgroundColor },
-              ]}>
+            <View style={[styles.headerBadge, { backgroundColor: badgeBackgroundColor }]}>
               {grade === 'A+' ? (
                 <GreenCheckSvg24 width={24} height={24} />
               ) : (
@@ -171,12 +187,13 @@ export default function ScanResults() {
             {ratingDescription}
           </Text>
         </View>
+
         <View style={[styles.ingredientsOverlay, { backgroundColor }]}>
           <View style={styles.ingredients}>
             <Text style={styles.ingredientsTitle}>Ingredients</Text>
 
             {ingredients.map((ingredient, index) => {
-              const { grade: ingredientGrade, color } =
+              const { grade: ingredientGrade, color } = 
                 getIngredientGradeInfo(ingredient.toxicity_rating);
               return (
                 <View key={index} style={styles.card}>

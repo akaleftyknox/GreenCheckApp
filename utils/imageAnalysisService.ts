@@ -90,12 +90,9 @@ export const imageAnalysisService = {
   },
 
   calculateOverallScore(ingredients: Ingredient[]): number {
-    const toxicityScores = ingredients
-      .map(ingredient => ingredient.toxicityRating)
-      .filter(score => score > 0);
+    if (ingredients.length === 0) return 0;  // Check if there are any ingredients to avoid division by zero
     
-    if (toxicityScores.length === 0) return 0;
-    
+    const toxicityScores = ingredients.map(ingredient => ingredient.toxicityRating);
     const totalScore = toxicityScores.reduce((sum, score) => sum + score, 0);
     return totalScore / toxicityScores.length;
   },

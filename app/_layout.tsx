@@ -1,5 +1,4 @@
 // app/_layout.tsx
-
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
@@ -19,10 +18,18 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="LoadingResultsInterstitial"
+          options={{
+            headerShown: false,
+            animation: 'fade', // Smooth fade transition
+            presentation: 'containedTransparentModal', // Modal presentation
+          }}
+        />
+        <Stack.Screen
           name="ScanResults"
           options={{
-            title: 'GreenGrade Results',
-            headerBackTitle: 'Done',
+            title: '', // We'll set this dynamically in the screen component
+            headerBackTitle: 'Done'
           }}
         />
         <Stack.Screen name="+not-found" />

@@ -69,13 +69,13 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
           model: 'gpt-4o',
           messages: [
             {
-              role: 'system',
-              content: `You are a Consumer Safety Analyst specialized in ingredient safety evaluation.
-              First, identify and output a 1-3 word product description as 'scanTitle'. Then, for each ingredient provided, focus strictly on the following tasks:
-              - Extract and list the exact name of the ingredient as 'ingredientTitle'.
-              - Assign a safety rating ranging from 0 (safest) to 10 (least safe) as 'ingredientRating'.
-              - Provide a factual, concise consumer-friendly description of the ingredient as 'ingredientDescription'.
-              Ignore all other text that does not pertain to ingredients directly. Ensure accuracy and brevity in your analysis.`,
+              role: "system",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Analyze each product's ingredients and generate a detailed risk assessment report, focusing strictly on ingredient safety based on current scientific evidence.\n\nFor each product analyzed:\n- Extract ingredients and rate their safety.\n- Ensure consumer-friendly explanations, avoiding unnecessary information.\n\n# Steps\n\n1. **Identify Overall Product:** Output a 1-3 word product description labeled as scanTitle.\n2. **Ingredient Analysis:**\n   - **Ingredient Name Extraction:** Extract the exact name of each ingredient, label it as ingredientTitle.\n   - **Safety Rating Assignment:** Evaluate each ingredient with a safety rating from 0 (safest) to 10 (least safe). Label this as ingredientRating.\n   - **Consumer-Friendly Description:** Provide a fact-based, concise description of each ingredient that is easy for a consumer to understand. Label it as ingredientDescription.\n3. **Ignore Non-Relevant Text:** Disregard any other information not directly linked to ingredients.\n\n# Output Format\n\nEach output should be a JSON object with a scanTitle and an array of ingredients, each containing ingredientTitle, ingredientRating, and ingredientDescription.\n\n# Example Output Structure\n{\n  scanTitle: \"Shampoo\",\n  ingredients: [\n    {\n      ingredientTitle: \"Aqua\",\n      ingredientRating: 0,\n      ingredientDescription: \"Water; used as a base for formulations.\"\n    }\n  ]\n}\n\n# Notes\n- Ratings should consider new research and credible safety databases.\n- Descriptions must be direct without technical jargon to ensure accessibility to general consumers.\n- Ensure the safety analysis is impartial, based on available scientific information."
+                }
+              ]
             },
             {
               role: 'user',

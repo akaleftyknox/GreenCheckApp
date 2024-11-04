@@ -1,4 +1,3 @@
-// app/camera.tsx
 import React, { useRef, useState } from 'react';
 import {
   View,
@@ -13,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useAutofocus } from '@/hooks/useAutofocus';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { imageAnalysisService } from '@/utils/imageAnalysisService';
 
 export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
@@ -53,15 +51,13 @@ export default function CameraScreen() {
         }
 
         const fileName = `captured_image_${Date.now()}.jpg`;
-        const analysis = await imageAnalysisService.analyzeImage(result.uri, fileName);
-
+        
         router.push({
-          pathname: '/ScanResults',
+          pathname: '/LoadingResultsInterstitial',
           params: {
-            imageUrl: analysis.imageUrl,
-            ingredients: JSON.stringify(analysis.ingredients),
-            overallScore: analysis.overallScore.toString(),
-          },
+            imageUri: result.uri,
+            fileName
+          }
         });
       } catch (error: any) {
         console.error('Error capturing image:', error);

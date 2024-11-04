@@ -3,7 +3,6 @@ import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { imageAnalysisService } from '@/utils/imageAnalysisService';
 
 export const useImagePicker = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -29,19 +28,16 @@ export const useImagePicker = () => {
         const image = result.assets[0];
         const fileName = image.fileName || `uploaded_image_${Date.now()}.jpg`;
         
-        const analysis = await imageAnalysisService.analyzeImage(image.uri, fileName);
-        
         router.push({
-          pathname: '/ScanResults',
+          pathname: '/LoadingResultsInterstitial',
           params: {
-            imageUrl: analysis.imageUrl,
-            ingredients: JSON.stringify(analysis.ingredients),
-            overallScore: analysis.overallScore.toString(),
+            imageUri: image.uri,
+            fileName
           },
         });
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An error occurred while processing the image.');
+      Alert.alert('Error', error.message || 'An error occurred while selecting the image.');
     } finally {
       setIsLoading(false);
     }
