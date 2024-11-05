@@ -90,11 +90,29 @@ export const imageAnalysisService = {
   },
 
   calculateOverallScore(ingredients: Ingredient[]): number {
-    if (ingredients.length === 0) return 0;  // Check if there are any ingredients to avoid division by zero
-    
-    const toxicityScores = ingredients.map(ingredient => ingredient.toxicityRating);
-    const totalScore = toxicityScores.reduce((sum, score) => sum + score, 0);
-    return totalScore / toxicityScores.length;
+    if (ingredients.length === 0) return 1;
+
+    const getWeight = (toxicityRating: number): number => {
+      if (toxicityRating >= 8) return 5;
+      if (toxicityRating >= 6) return 4;
+      if (toxicityRating >= 4) return 3;
+      if (toxicityRating >= 2) return 2;
+      return 1;
+    };
+
+    let totalWeightedScore = 0;
+    let totalWeights = 0;
+
+    ingredients.forEach(ingredient => {
+      const weight = getWeight(ingredient.toxicityRating);
+      totalWeightedScore += ingredient.toxicityRating * weight;
+      totalWeights += weight;
+    });
+
+    if (totalWeights === 0) return 1;
+
+    const weightedAverage = totalWeightedScore / totalWeights;
+    return Math.max(weightedAverage, 1);
   },
 
   async analyzeImage(imageUri: string, fileName: string): Promise<ProcessedAnalysis> {
