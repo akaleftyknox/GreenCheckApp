@@ -1,5 +1,6 @@
 // utils/imageAnalysisService.ts
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
 import { supabase } from './supabase';
 import { getMimeType } from './getMimeType';
@@ -7,38 +8,78 @@ import { getGradeInfo } from './gradeUtils';
 import { createScan } from './db';
 
 export interface Ingredient {
+  id: string;
+  title: string;
+  toxicityRating: number;
+  description: string;
+}
+
+export interface AnalysisResult {
+  scanTitle: string | null;
+  ingredients: {
     id: string;
     title: string;
     toxicityRating: number;
     description: string;
-  }
+  }[];
+}
 
-export interface AnalysisResult {
-    scanTitle: string | null;
-    ingredients: {
-      id: string;
-      title: string;
-      toxicityRating: number;
-      description: string;
-    }[];
-  }
-  
-  export interface ProcessedAnalysis {
-    imageUrl: string;
-    scanTitle: string | null;
-    ingredients: Ingredient[];
-    overallScore: number;
-    grade: string;
-    ratingDescription: string;
-  }
+export interface ProcessedAnalysis {
+  imageUrl: string;
+  scanTitle: string | null;
+  ingredients: Ingredient[];
+  overallScore: number;
+  grade: string;
+  ratingDescription: string;
+}
+
+interface CompressionOptions {
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+}
 
 export const imageAnalysisService = {
+    async compressImage(uri: string, options: CompressionOptions = {}): Promise<string> {
+        const { 
+          maxWidth = 1200, 
+          maxHeight = 1200, 
+          quality = 0.5 
+        } = options;
+      
+        try {
+          const manipulateResult = await ImageManipulator.manipulateAsync(
+            uri,
+            [
+              {
+                resize: {
+                  width: maxWidth
+                  // Removed height to maintain aspect ratio
+                }
+              }
+            ],
+            {
+              compress: quality,
+              format: ImageManipulator.SaveFormat.JPEG
+            }
+          );
+      
+          return manipulateResult.uri;
+        } catch (error) {
+          console.warn('Image compression failed, using original image:', error);
+          return uri;
+        }
+      },
+
   async uploadImageToSupabase(uri: string, fileName: string): Promise<string> {
+    // First compress the image
+    const compressedUri = await this.compressImage(uri);
+    
     const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
     const path = `${Date.now()}.${fileExt}`;
     const contentType = getMimeType(fileName);
     
-    const base64 = await FileSystem.readAsStringAsync(uri, {
+    const base64 = await FileSystem.readAsStringAsync(compressedUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     
@@ -89,30 +130,62 @@ export const imageAnalysisService = {
     return analyzeData.analysis;
   },
 
-  calculateOverallScore(ingredients: Ingredient[]): number {
+  calculateOverallScore(ingredients: Array<{toxicityRating: number | string}>): number {
     if (ingredients.length === 0) return 1;
-
-    const getWeight = (toxicityRating: number): number => {
-      if (toxicityRating >= 8) return 5;
-      if (toxicityRating >= 6) return 4;
-      if (toxicityRating >= 4) return 3;
-      if (toxicityRating >= 2) return 2;
-      return 1;
-    };
-
-    let totalWeightedScore = 0;
-    let totalWeights = 0;
-
-    ingredients.forEach(ingredient => {
-      const weight = getWeight(ingredient.toxicityRating);
-      totalWeightedScore += ingredient.toxicityRating * weight;
-      totalWeights += weight;
+  
+    // Single pass through ingredients to collect all metrics
+    const metrics = ingredients.reduce((acc, ing) => {
+      const rating = Math.max(1, Number(ing.toxicityRating));
+      
+      // Count high/moderate toxicity items
+      if (rating >= 7) acc.highToxicityCount++;
+      else if (rating >= 4) acc.moderateToxicityCount++;
+      
+      // Accumulate toxicity sum
+      acc.toxicitySum += rating;
+      
+      // Calculate and store weight using original logic
+      let weight;
+      if (rating >= 7) {
+        weight = Math.pow(1.8, rating - 1);
+      } else if (rating >= 4) {
+        weight = Math.pow(1.4, rating - 1);
+      } else {
+        weight = Math.pow(1.2, rating - 1);
+      }
+      
+      acc.totalScore += rating * weight;
+      acc.maxPossibleScore += 10 * weight;
+      
+      return acc;
+    }, {
+      highToxicityCount: 0,
+      moderateToxicityCount: 0,
+      toxicitySum: 0,
+      totalScore: 0,
+      maxPossibleScore: 0
     });
-
-    if (totalWeights === 0) return 1;
-
-    const weightedAverage = totalWeightedScore / totalWeights;
-    return Math.max(weightedAverage, 1);
+  
+    const count = ingredients.length;
+    
+    // Use original formulas exactly
+    const countFactor = count <= 5 ? 1 : 
+      Math.min(2.0, 1 + ((count - 5) * 0.08));
+      
+    const cumulativePenalty = 
+      Math.pow(1.2, metrics.highToxicityCount) * 
+      Math.pow(1.05, metrics.moderateToxicityCount);
+      
+    const averageToxicity = metrics.toxicitySum / count;
+    const synergyCurve = Math.max(0, (averageToxicity - 3) / 7);
+    const synergyPenalty = count <= 5 ? 1 :
+      1 + (synergyCurve * (count - 5) / 200);
+  
+    let normalizedScore = (metrics.totalScore / metrics.maxPossibleScore) * 10;
+    normalizedScore *= countFactor * cumulativePenalty * synergyPenalty;
+    
+    const finalScore = Math.min(10, Math.max(1, normalizedScore));
+    return Number((1 + (8.5 * (Math.log(finalScore) / Math.log(10)))).toFixed(2));
   },
 
   async analyzeImage(imageUri: string, fileName: string): Promise<ProcessedAnalysis> {

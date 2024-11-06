@@ -35,7 +35,11 @@ async function callOpenAIWithRetry(imageUrl, retries = 3, retryDelay = 2000) {
             ]
           },
         ],
-        max_tokens: 2000,
+        temperature: 0,
+        max_tokens: 1000,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0,
       });
 
       console.log('OpenAI Completion:', completion.choices[0]);

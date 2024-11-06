@@ -51,7 +51,7 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
     .map((i) => i.trim())
     .filter((i) => i.length > 0);
 
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = 8;
   let allIngredients = [];
   let scanTitle = null;
 
@@ -82,9 +82,12 @@ async function analyzeIngredientsWithRetry(extractedText, retries = 3, retryDela
               content: `Analyze only the product description and ingredients provided: ${batchText}`,
             },
           ],
-          response_format: zodResponseFormat(IngredientAnalysisSchema, 'ingredient_analysis'),
-          temperature: 0.1,
+          temperature: 0,
           max_tokens: 2000,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          response_format: zodResponseFormat(IngredientAnalysisSchema, 'ingredient_analysis'),
         });
 
         console.log(`Batch completed in ${Date.now() - startTime}ms`);

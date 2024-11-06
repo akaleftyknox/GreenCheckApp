@@ -5834,7 +5834,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-image-manipulator@npm:~12.0.5":
+"expo-image-manipulator@npm:^12.0.5":
   version: 12.0.5
   resolution: "expo-image-manipulator@npm:12.0.5"
   dependencies:
@@ -6649,7 +6649,7 @@ __metadata:
     expo-file-system: ~17.0.1
     expo-font: ~12.0.9
     expo-image: ~1.13.0
-    expo-image-manipulator: ~12.0.5
+    expo-image-manipulator: ^12.0.5
     expo-image-picker: ~15.0.7
     expo-linking: ~6.3.1
     expo-router: ~3.5.23
@@ -6660,6 +6660,7 @@ __metadata:
     jest: ^29.2.1
     jest-expo: ~51.0.3
     lottie-react-native: 6.7.0
+    nanoid: ^5.0.8
     openai: ^4.68.1
     react: 18.2.0
     react-dom: 18.2.0
@@ -9212,6 +9213,15 @@ __metadata:
   bin:
     nanoid: bin/nanoid.cjs
   checksum: d36c427e530713e4ac6567d488b489a36582ef89da1d6d4e3b87eded11eb10d7042a877958c6f104929809b2ab0bafa17652b076cdf84324aa75b30b722204f2
+  languageName: node
+  linkType: hard
+
+"nanoid@npm:^5.0.8":
+  version: 5.0.8
+  resolution: "nanoid@npm:5.0.8"
+  bin:
+    nanoid: bin/nanoid.js
+  checksum: df131a515465053ff25c8cf0450ef191e1db83b45fe125af43f50d39feddf1f161d3b2abb34cb993df35a76b427f8d6d982e16e47d67b2fbe843664af025b5e2
   languageName: node
   linkType: hard
 

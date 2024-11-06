@@ -1,5 +1,5 @@
 // app/index.tsx
-import React from 'react';
+import React, { useCallback, memo } from 'react';
 import {
   StyleSheet,
   SafeAreaView,
@@ -19,6 +19,80 @@ import { useImagePicker } from '@/hooks/useImagePicker';
 import { useScans } from '@/hooks/useScans';
 import type { Scan } from '@/hooks/useScans';
 
+// Memoized card component
+const ScanCard = memo(({ item }: { item: Scan }) => {
+  const router = useRouter();
+  const { grade, badgeBackgroundColor, backgroundColor } = getGradeInfo(item.overall_grade);
+  const textColor = getTextColor(item.overall_grade);
+
+  const handlePress = useCallback(() => {
+    router.push({
+      pathname: '/ScanResults',
+      params: { scanId: item.id },
+    });
+  }, [router, item.id]);
+
+  const handleShare = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('Share scan:', item.id);
+  }, [item.id]);
+
+  return (
+    <TouchableOpacity onPress={handlePress}>
+      <View style={[styles.card, { backgroundColor }]}>
+        <View style={styles.cardShareWrapper}>
+          <TouchableOpacity onPress={handleShare}>
+            <View style={styles.cardShare}>
+              <Ionicons name="share-outline" size={24} color="#000" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cardTop}>
+          <Image
+            resizeMode="cover"
+            style={styles.cardImageUrl}
+            source={{ uri: item.image_url }}
+          />
+        </View>
+
+        <View style={styles.cardBody}>
+          <View style={styles.cardHeader}>
+            <Text style={[styles.cardScanTitle, { color: textColor }]}>
+              {item.scan_title || 'Untitled'}
+            </Text>
+
+            <View style={styles.cardGradeContainer}>
+              {grade === 'A+' ? (
+                <GreenCheckSvg17
+                  width={15}
+                  height={15}
+                  style={{ marginRight: 4 }}
+                />
+              ) : (
+                <Text style={[styles.cardGradeLetter, { color: textColor }]}>
+                  {grade}
+                </Text>
+              )}
+              <Text style={[styles.cardOverallGrade, { color: textColor, marginLeft: 4 }]}>
+                • {item.overall_grade.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.cardCreatedAt, { color: textColor }]}>
+            {new Date(item.created_at).toLocaleDateString()}
+          </Text>
+
+          <Text style={[styles.cardGradeDescription, { color: textColor }]}>
+            {item.overall_grade_description}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function Home() {
   const router = useRouter();
   const { pickImage, isLoading: isPickerLoading } = useImagePicker();
@@ -28,83 +102,32 @@ export default function Home() {
     onRefresh,
     canRefresh 
   } = useScans({
-    refreshLimit: 10, // 10 refreshes per minute
-    refreshCooldown: 60000, // 1 minute cooldown
+    refreshLimit: 10,
+    refreshCooldown: 60000,
   });
 
-  const handleShare = (id: string) => {
-    console.log('Share scan:', id);
-  };
-
-  const openCamera = () => {
+  const openCamera = useCallback(() => {
     router.push('/camera');
-  };
+  }, [router]);
 
-  const renderScanCard = ({ item }: { item: Scan }) => {
-    const { grade, badgeBackgroundColor, backgroundColor } = getGradeInfo(item.overall_grade);
-    const textColor = getTextColor(item.overall_grade);
+  const keyExtractor = useCallback((item: Scan) => item.id, []);
+  const renderSeparator = useCallback(() => <View style={{ height: 16 }} />, []);
+  const renderScanCard = useCallback(({ item }: { item: Scan }) => (
+    <ScanCard item={item} />
+  ), []);
 
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          router.push({
-            pathname: '/ScanResults',
-            params: { scanId: item.id },
-          });
-        }}>
-        <View style={[styles.card, { backgroundColor }]}>
-          <View style={styles.cardShareWrapper}>
-            <TouchableOpacity onPress={() => handleShare(item.id)}>
-              <View style={styles.cardShare}>
-                <Ionicons name="share-outline" size={24} color="#000" />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.cardTop}>
-            <Image
-              resizeMode="cover"
-              style={styles.cardImageUrl}
-              source={{ uri: item.image_url }}
-            />
-          </View>
-
-          <View style={styles.cardBody}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardScanTitle, { color: textColor }]}>
-                {item.scan_title || 'Untitled'}
-              </Text>
-
-              <View style={styles.cardGradeContainer}>
-                {grade === 'A+' ? (
-                  <GreenCheckSvg17
-                    width={15}
-                    height={15}
-                    style={{ marginRight: 4 }}
-                  />
-                ) : (
-                  <Text style={[styles.cardGradeLetter, { color: textColor }]}>
-                    {grade}
-                  </Text>
-                )}
-                <Text style={[styles.cardOverallGrade, { color: textColor, marginLeft: 4 }]}>
-                  • {item.overall_grade.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={[styles.cardCreatedAt, { color: textColor }]}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-
-            <Text style={[styles.cardGradeDescription, { color: textColor }]}>
-              {item.overall_grade_description}
-            </Text>
-          </View>
+  const renderHeader = useCallback(() => {
+    if (isRefreshing && !canRefresh) {
+      return (
+        <View style={styles.refreshLimitIndicator}>
+          <Text style={styles.refreshLimitText}>
+            Please wait before refreshing again
+          </Text>
         </View>
-      </TouchableOpacity>
-    );
-  };
+      );
+    }
+    return null;
+  }, [isRefreshing, canRefresh]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -135,8 +158,12 @@ export default function Home() {
       <FlatList
         data={scans}
         renderItem={renderScanCard}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         contentContainerStyle={styles.content}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        initialNumToRender={5}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -144,16 +171,8 @@ export default function Home() {
             tintColor="#000000"
           />
         }
-        ListHeaderComponent={
-          isRefreshing && !canRefresh ? (
-            <View style={styles.refreshLimitIndicator}>
-              <Text style={styles.refreshLimitText}>
-                Please wait before refreshing again
-              </Text>
-            </View>
-          ) : null
-        }
-        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListHeaderComponent={renderHeader}
+        ItemSeparatorComponent={renderSeparator}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
