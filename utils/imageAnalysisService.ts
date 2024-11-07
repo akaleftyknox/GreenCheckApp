@@ -39,6 +39,10 @@ interface CompressionOptions {
   quality?: number;
 }
 
+interface AnalysisProgressCallback {
+    onStepChange?: (step: number) => void;
+  }
+
 export const imageAnalysisService = {
     async compressImage(uri: string, options: CompressionOptions = {}): Promise<string> {
         const { 
@@ -147,11 +151,11 @@ export const imageAnalysisService = {
       // Calculate and store weight using original logic
       let weight;
       if (rating >= 7) {
-        weight = Math.pow(1.8, rating - 1);
+        weight = Math.pow(1.2, rating - 1);  // From 1.4 to 1.3
       } else if (rating >= 4) {
-        weight = Math.pow(1.4, rating - 1);
+        weight = Math.pow(1.10, rating - 1); // From 1.2 to 1.15
       } else {
-        weight = Math.pow(1.2, rating - 1);
+        weight = Math.pow(1.02, rating - 1); // From 1.1 to 1.05
       }
       
       acc.totalScore += rating * weight;
@@ -169,17 +173,19 @@ export const imageAnalysisService = {
     const count = ingredients.length;
     
     // Use original formulas exactly
-    const countFactor = count <= 5 ? 1 : 
-      Math.min(2.0, 1 + ((count - 5) * 0.08));
+    const countFactor = count <= 7 ? 1 : 
+      Math.min(1.5, 1 + ((count - 7) * 0.04)); // From 0.08 to 0.06, cap from 2.0 to 1.75
+
       
     const cumulativePenalty = 
-      Math.pow(1.2, metrics.highToxicityCount) * 
-      Math.pow(1.05, metrics.moderateToxicityCount);
+      Math.pow(1.10, metrics.highToxicityCount) * // From 1.2 to 1.15
+      Math.pow(1.02, metrics.moderateToxicityCount); // From 1.05 to 1.03
+    
       
     const averageToxicity = metrics.toxicitySum / count;
-    const synergyCurve = Math.max(0, (averageToxicity - 3) / 7);
-    const synergyPenalty = count <= 5 ? 1 :
-      1 + (synergyCurve * (count - 5) / 200);
+    const synergyCurve = Math.max(0, (averageToxicity - 3.5) / 7); // Raised threshold from 3 to 3.5
+    const synergyPenalty = count <= 7 ? 1 :
+      1 + (synergyCurve * (count - 7) / 250); // From 200 to 250
   
     let normalizedScore = (metrics.totalScore / metrics.maxPossibleScore) * 10;
     normalizedScore *= countFactor * cumulativePenalty * synergyPenalty;
@@ -188,34 +194,51 @@ export const imageAnalysisService = {
     return Number((1 + (8.5 * (Math.log(finalScore) / Math.log(10)))).toFixed(2));
   },
 
-  async analyzeImage(imageUri: string, fileName: string): Promise<ProcessedAnalysis> {
-    const uploadedUrl = await this.uploadImageToSupabase(imageUri, fileName);
-    const analysisResult = await this.checkIngredients(uploadedUrl);
-    const ingredients = analysisResult.ingredients;
-    const overallScore = this.calculateOverallScore(ingredients);
-    const { grade, ratingDescription } = getGradeInfo(overallScore);
+  async analyzeImage(
+    imageUri: string, 
+    fileName: string,
+    callbacks?: AnalysisProgressCallback
+  ): Promise<ProcessedAnalysis> {
+    try {
+      // Step 1: Upload
+      callbacks?.onStepChange?.(1);
+      const uploadedUrl = await this.uploadImageToSupabase(imageUri, fileName);
+      
+      // Step 2: Analyze
+      callbacks?.onStepChange?.(2);
+      const analysisResult = await this.checkIngredients(uploadedUrl);
+      
+      // Step 3: Process and Save
+      callbacks?.onStepChange?.(3);
+      const ingredients = analysisResult.ingredients;
+      const overallScore = this.calculateOverallScore(ingredients);
+      const { grade, ratingDescription } = getGradeInfo(overallScore);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    await createScan(user?.id, {
-      overall_grade: overallScore,
-      overall_grade_description: ratingDescription,
-      image_url: uploadedUrl,
-      scan_title: analysisResult.scanTitle,
-      ingredients: ingredients.map((ing: any) => ({
-        title: ing.title,
-        toxicity_rating: ing.toxicityRating,
-        description: ing.description,
-      })),
-    });
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      await createScan(user?.id, {
+        overall_grade: overallScore,
+        overall_grade_description: ratingDescription,
+        image_url: uploadedUrl,
+        scan_title: analysisResult.scanTitle,
+        ingredients: ingredients.map((ing: any) => ({
+          title: ing.title,
+          toxicity_rating: ing.toxicityRating,
+          description: ing.description,
+        })),
+      });
 
-    return {
-      imageUrl: uploadedUrl,
-      scanTitle: analysisResult.scanTitle,
-      ingredients,
-      overallScore,
-      grade,
-      ratingDescription,
-    };
+      return {
+        imageUrl: uploadedUrl,
+        scanTitle: analysisResult.scanTitle,
+        ingredients,
+        overallScore,
+        grade,
+        ratingDescription,
+      };
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      throw error;
+    }
   }
 };
