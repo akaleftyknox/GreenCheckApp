@@ -5,13 +5,24 @@ import {
   Alert,
   TouchableOpacity,
   Animated,
+  Text,
 } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions, Camera, BarcodeScanningResult } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useAutofocus } from '@/hooks/useAutofocus';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openFoodFactsService } from '@/utils/openFoodFactsService';
+import { imageAnalysisService } from '@/utils/imageAnalysisService';
+
+type CameraMode = 'barcode' | 'ingredients';
+
+// Define barcode scanning result type
+interface BarcodeResult {
+  type: string;
+  data: string;
+}
 
 export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
@@ -20,6 +31,7 @@ export default function CameraScreen() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
   const [facing, setFacing] = useState<CameraType>('back');
+  const [mode, setMode] = useState<CameraMode>('barcode');
   const { isRefreshing, focusSquare, onTap } = useAutofocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -36,6 +48,56 @@ export default function CameraScreen() {
   };
 
   const tap = Gesture.Tap().onBegin(onTap);
+
+  const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
+    if (isProcessing || mode !== 'barcode') return;
+  
+    try {
+      setIsProcessing(true);
+      const product = await openFoodFactsService.getProductByBarcode(result.data);
+      
+      if (product && product.ingredients_text) {
+        // Product found - analyze ingredients
+        const analysisResult = await imageAnalysisService.checkIngredients(product.ingredients_text);
+        if (analysisResult) {
+          const overallScore = imageAnalysisService.calculateOverallScore(
+            analysisResult.ingredients
+          );
+  
+          router.push({
+            pathname: '/ScanResults',
+            params: {
+              scanResult: JSON.stringify({
+                ...analysisResult,
+                overallScore,
+                source: 'open_food_facts',
+                productData: product
+              })
+            }
+          });
+          return;
+        }
+      }
+  
+      // If we get here, either no product was found or it had no ingredients
+      setMode('ingredients');
+      Alert.alert(
+        'Product Not Found',
+        'Please take a clear photo of the ingredients list.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error processing barcode:', error);
+      Alert.alert(
+        'Error',
+        'Failed to process barcode. Please take a photo of the ingredients list instead.',
+        [{ text: 'OK' }]
+      );
+      setMode('ingredients');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const takePicture = async () => {
     if (cameraRef.current && !isProcessing && isCameraReady) {
@@ -70,6 +132,21 @@ export default function CameraScreen() {
     }
   };
 
+  const renderGuidanceText = () => (
+    <View style={styles.guidanceContainer}>
+      <Text style={styles.guidanceText}>
+        {mode === 'barcode' 
+          ? 'Scan Product Barcode'
+          : 'Take Photo of Ingredients'}
+      </Text>
+      <Text style={styles.guidanceSubtext}>
+        {mode === 'barcode'
+          ? 'Hold phone steady and align with barcode'
+          : 'Ensure text is clear and well-lit'}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <View style={StyleSheet.absoluteFill}>
@@ -80,6 +157,25 @@ export default function CameraScreen() {
             facing={facing}
             onCameraReady={handleCameraReady}
             autofocus={isRefreshing ? 'off' : 'on'}
+            barcodeScannerSettings={mode === 'barcode' ? {
+              // Enable all barcode types for maximum compatibility
+              barcodeTypes: [
+                'aztec',
+                'codabar', 
+                'code39',
+                'code93',
+                'code128',
+                'datamatrix',
+                'ean8',
+                'ean13',
+                'itf14',
+                'pdf417',
+                'qr',
+                'upc_e',
+                'upc_a'
+              ],
+            } : undefined}
+            onBarcodeScanned={mode === 'barcode' ? handleBarcodeScanned : undefined}
           />
         </View>
       </View>
@@ -99,7 +195,18 @@ export default function CameraScreen() {
                 <Ionicons color="#9CA3AF" name="close" size={20} />
               </TouchableOpacity>
             </View>
+            {mode === 'ingredients' && (
+              <TouchableOpacity 
+                style={styles.modeSwitchButton}
+                onPress={() => setMode('barcode')}
+              >
+                <Ionicons name="barcode" size={20} color="#9CA3AF" />
+                <Text style={styles.modeSwitchText}>Try Barcode</Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {renderGuidanceText()}
 
           <GestureDetector gesture={tap}>
             <View style={styles.cameraContent}>
@@ -112,20 +219,22 @@ export default function CameraScreen() {
                 />
               )}
               <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.captureButton,
-                    (!isCameraReady || isProcessing) && styles.disabledButton,
-                  ]}
-                  onPress={takePicture}
-                  disabled={!isCameraReady || isProcessing}
-                >
-                  <Ionicons
-                    name="camera"
-                    size={36}
-                    color={(!isCameraReady || isProcessing) ? '#999' : '#fff'}
-                  />
-                </TouchableOpacity>
+                {mode === 'ingredients' && (
+                  <TouchableOpacity
+                    style={[
+                      styles.captureButton,
+                      (!isCameraReady || isProcessing) && styles.disabledButton,
+                    ]}
+                    onPress={takePicture}
+                    disabled={!isCameraReady || isProcessing}
+                  >
+                    <Ionicons
+                      name="camera"
+                      size={36}
+                      color={(!isCameraReady || isProcessing) ? '#999' : '#fff'}
+                    />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </GestureDetector>
@@ -196,5 +305,44 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#ccc',
+  },
+  guidanceContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 9998,
+  },
+  guidanceText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  guidanceSubtext: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  modeSwitchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    position: 'absolute',
+    right: 12,
+    gap: 4,
+  },
+  modeSwitchText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
