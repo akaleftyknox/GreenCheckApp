@@ -1,6 +1,6 @@
-// hooks/useScans.ts
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/utils/supabase';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 export interface Scan {
   id: string;
@@ -12,86 +12,106 @@ export interface Scan {
 }
 
 interface UseScansOptions {
-  refreshLimit?: number; // Number of refreshes allowed per minute
-  refreshCooldown?: number; // Cooldown period in milliseconds
+  refreshLimit?: number;
+  refreshCooldown?: number;
+  autoRefresh?: boolean;
 }
 
 export function useScans(options: UseScansOptions = {}) {
   const {
-    refreshLimit = 6, // Default to 6 refreshes per minute
-    refreshCooldown = 60000, // Default to 1 minute cooldown
+    refreshLimit = 6,
+    refreshCooldown = 60000,
+    autoRefresh = true
   } = options;
 
   const [scans, setScans] = useState<Scan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
-  const lastRefreshTime = useRef<number>(0);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
   const refreshTimer = useRef<NodeJS.Timeout>();
+  const mountedRef = useRef(true);
 
-  const fetchScans = useCallback(async () => {
+  const fetchScans = useCallback(async (showLoading = true) => {
+    if (!mountedRef.current) return;
+    
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
+      
       const { data, error } = await supabase
         .from('scans')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setScans(data || []);
+      
+      if (mountedRef.current) {
+        setScans(data || []);
+        setLastRefreshTime(Date.now());
+      }
     } catch (error) {
       console.error('Error fetching scans:', error);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
+  const handleDatabaseChange = useCallback(
+    async (payload: RealtimePostgresChangesPayload<{ [key: string]: any }>) => {
+      console.log('Received database change:', payload);
+
+      // Fetch without showing loading indicator for real-time updates
+      await fetchScans(false);
+    },
+    [fetchScans]
+  );
+
   const handleRefresh = useCallback(async () => {
-    const now = Date.now();
-    
-    // Always show loading animation
-    setIsLoading(true);
-    
-    // Check if we're within the refresh limit
-    if (refreshCount < refreshLimit) {
-      setRefreshCount(count => count + 1);
-      lastRefreshTime.current = now;
-      
-      // Actually fetch the data
-      await fetchScans();
-      
-      // Set up reset timer if not already set
-      if (!refreshTimer.current) {
-        refreshTimer.current = setTimeout(() => {
-          setRefreshCount(0);
-          refreshTimer.current = undefined;
-        }, refreshCooldown);
-      }
-    } else {
-      // If we've hit the limit, wait a short time to show the loading animation
-      await new Promise(resolve => setTimeout(resolve, 500));
+    if (refreshCount >= refreshLimit) {
+      console.log('Manual refresh limit reached');
       setIsLoading(false);
+      return;
     }
-  }, [refreshCount, refreshLimit, refreshCooldown, fetchScans]);
 
-  // Set up real-time subscription
+    setRefreshCount(count => count + 1);
+    await fetchScans(true);
+
+    if (!refreshTimer.current) {
+      refreshTimer.current = setTimeout(() => {
+        setRefreshCount(0);
+        refreshTimer.current = undefined;
+      }, refreshCooldown);
+    }
+  }, [fetchScans, refreshCount, refreshLimit, refreshCooldown]);
+
   useEffect(() => {
-    fetchScans();
+    fetchScans(true);
 
-    const subscription = supabase
-      .channel('scans')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'scans' },
-        fetchScans
-      )
-      .subscribe();
+    if (autoRefresh) {
+      const subscription = supabase
+        .channel('scans_changes')
+        .on('postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'scans' 
+          },
+          handleDatabaseChange
+        )
+        .subscribe();
 
-    return () => {
-      subscription.unsubscribe();
-      if (refreshTimer.current) {
-        clearTimeout(refreshTimer.current);
-      }
-    };
-  }, [fetchScans]);
+      return () => {
+        mountedRef.current = false;
+        subscription.unsubscribe();
+        if (refreshTimer.current) {
+          clearTimeout(refreshTimer.current);
+        }
+      };
+    }
+  }, [fetchScans, handleDatabaseChange, autoRefresh]);
 
   return {
     scans,
@@ -99,5 +119,6 @@ export function useScans(options: UseScansOptions = {}) {
     refreshCount,
     canRefresh: refreshCount < refreshLimit,
     onRefresh: handleRefresh,
+    fetchScans  // Added this line to export fetchScans
   };
 }

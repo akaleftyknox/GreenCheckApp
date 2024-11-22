@@ -10,6 +10,7 @@ import {
   Image,
   Text,
   ActivityIndicator,
+  GestureResponderEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -32,7 +33,7 @@ const ScanCard = memo(({ item }: { item: Scan }) => {
     });
   }, [router, item.id]);
 
-  const handleShare = useCallback((e: React.MouseEvent) => {
+  const handleShare = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
     console.log('Share scan:', item.id);
   }, [item.id]);
